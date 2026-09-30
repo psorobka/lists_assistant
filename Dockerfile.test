@@ -1,0 +1,6 @@
+FROM python:3.13-slim
+WORKDIR /workspace
+COPY requirements_test.txt /tmp/requirements_test.txt
+RUN pip install --no-cache-dir -r /tmp/requirements_test.txt
+ENV PYTHONDONTWRITEBYTECODE=1
+CMD ["pytest", "-q", "--cov=custom_components/lists_assistant", "--cov-report=term-missing", "--cov-fail-under=90"]

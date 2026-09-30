@@ -1,0 +1,13 @@
+{
+  "domain": "lists_assistant",
+  "name": "Lists Assistant",
+  "after_dependencies": ["shopping_list"],
+  "codeowners": ["@psorobka"],
+  "config_flow": true,
+  "documentation": "https://github.com/psorobka/lists_assistant",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/psorobka/lists_assistant/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

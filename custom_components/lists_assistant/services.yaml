@@ -1,0 +1,227 @@
+get_sync_issues:
+  name: Show synchronization issues
+  description: Return conflicts, pending writes and changes retained for previous
+    list bindings.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+resolve_sync_conflict:
+  name: Resolve a synchronization conflict
+  description: Choose which version of the product to keep after a conflicting edit
+    or deletion.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+    conflict_id:
+      required: true
+      selector:
+        text: null
+    choose:
+      required: true
+      selector:
+        select:
+          options:
+          - home_assistant
+          - listonic
+resolve_sync_write:
+  name: Resolve an uncertain synchronization write
+  description: Confirm the result after inspecting both lists. For a completed addition,
+    select the new target item ID. Choose not_applied only after verifying that the
+    item was not created.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+    operation_id:
+      required: true
+      selector:
+        text: null
+    outcome:
+      required: true
+      selector:
+        select:
+          options:
+          - applied
+          - not_applied
+    target_item_id:
+      selector:
+        text: null
+get_lists:
+  name: Read lists and products
+  description: Return all accessible active lists and products for this account, including
+    their IDs and metadata.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+create_list:
+  name: Create a list
+  description: Create a cloud list. Returns list_id when a response is requested.
+    Select it in integration options to add its todo entity.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    name:
+      name: Name
+      selector:
+        text: {}
+      required: true
+rename_list:
+  name: Rename a list
+  description: Rename the list with the specified numeric ID.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    list_id:
+      name: Listonic list ID
+      selector:
+        text: {}
+      required: true
+    name:
+      name: Name
+      selector:
+        text: {}
+      required: true
+delete_list:
+  name: Deactivate a list
+  description: Deactivate the list using Active:0. Its todo entity becomes unavailable.
+    This is not a confirmed permanent deletion.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    list_id:
+      name: Listonic list ID
+      selector:
+        text: {}
+      required: true
+add_item:
+  name: Add a product
+  description: Add a product with optional metadata. Returns item_id when a response
+    is requested.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    list_id:
+      name: Listonic list ID
+      selector:
+        text: {}
+      required: true
+    name:
+      name: Name
+      selector:
+        text: {}
+      required: true
+    amount:
+      name: Quantity
+      selector:
+        text: {}
+    unit:
+      name: Unit
+      selector:
+        text: {}
+    description:
+      name: Description
+      selector:
+        text: {}
+    price:
+      name: Price
+      selector:
+        number:
+          min: 0
+          step: 0.01
+          mode: box
+update_item:
+  name: Update a product
+  description: Change only the supplied fields. Empty amount, unit or description
+    clears that field. Price 0 clears the price value.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    list_id:
+      name: Listonic list ID
+      selector:
+        text: {}
+      required: true
+    item_id:
+      name: Listonic product ID
+      selector:
+        text: {}
+      required: true
+    name:
+      name: Name
+      selector:
+        text: {}
+    checked:
+      name: Completed
+      selector:
+        boolean: {}
+    amount:
+      name: Quantity
+      selector:
+        text: {}
+    unit:
+      name: Unit
+      selector:
+        text: {}
+    description:
+      name: Description
+      selector:
+        text: {}
+    price:
+      name: Price
+      selector:
+        number:
+          min: 0
+          step: 0.01
+          mode: box
+delete_item:
+  name: Delete a product
+  description: Delete the product with the specified numeric ID from this list.
+  fields:
+    config_entry_id:
+      name: Account
+      selector:
+        config_entry:
+          integration: lists_assistant
+      required: true
+    list_id:
+      name: Listonic list ID
+      selector:
+        text: {}
+      required: true
+    item_id:
+      name: Listonic product ID
+      selector:
+        text: {}
+      required: true

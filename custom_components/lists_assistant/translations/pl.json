@@ -1,0 +1,277 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Połącz z Listonic",
+        "description": "Zaloguj się na konto Listonic. Hasło posłuży tylko do pobrania tokenów API i nie zostanie zapisane.",
+        "data": {
+          "email": "E-mail",
+          "password": "Hasło"
+        }
+      },
+      "lists": {
+        "title": "Wybierz listy",
+        "description": "Wybierz listy Listonic, które chcesz dodać do Home Assistant.",
+        "data": {
+          "list_ids": "Listy Listonic",
+          "shopping_list_id": "Użyj jako listy zakupów Home Assistant"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Połącz ponownie z Listonic",
+        "description": "Zaloguj się na to samo konto Listonic. Wybrane listy i nazwy encji zostaną zachowane.",
+        "data": {
+          "email": "E-mail",
+          "password": "Hasło"
+        }
+      },
+      "bridge": {
+        "description": "Home Assistant: {local_count} pozycji. Listonic „{list_name}”: {remote_count} pozycji. Pierwsze scalenie zachowa wszystkie pozycje z obu list, także powtarzające się nazwy. Kolejne zmiany będą synchronizowane w obie strony. Przy zmianie listy oczekujące zmiany starego powiązania pozostaną zapisane dla starej listy. [Skonfiguruj listę zakupów Home Assistant](https://my.home-assistant.io/redirect/config_flow_start/?domain=shopping_list). Liczba pozycji pozostających przy starym powiązaniu: {held_count}. Nie zostaną wysłane na nową listę.",
+        "title": "Połącz listy zakupów",
+        "data": {
+          "confirm": "Scal obie listy i włącz synchronizację"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Listonic odrzucił e-mail lub hasło.",
+      "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
+      "select_list": "Wybierz co najmniej jedną listę Listonic.",
+      "invalid_email": "Podaj poprawny adres e-mail.",
+      "wrong_account": "Zaloguj się na konto już skonfigurowane w tej integracji.",
+      "invalid_selection": "Wybierz dostępne listy i wskaż cel listy zakupów spośród wybranych list.",
+      "shopping_list_missing": "Najpierw skonfiguruj i uruchom wbudowaną listę zakupów Home Assistant.",
+      "confirm_merge": "Potwierdź opisany sposób scalenia list.",
+      "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
+      "resolve_before_switch": "Rozstrzygnij niepewne zapisy starego powiązania przed zmianą listy docelowej."
+    },
+    "abort": {
+      "already_configured": "To konto Listonic jest już skonfigurowane.",
+      "no_lists": "Utwórz listę w Listonic, a następnie ponownie dodaj integrację.",
+      "reauth_successful": "Sesja Listonic została odnowiona.",
+      "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
+      "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
+      "storage_error": "Nie można bezpiecznie odczytać zapisanych mapowań synchronizacji. Zachowaj plik danych i sprawdź jego kopię zapasową."
+    }
+  },
+  "entity": {
+    "todo": {
+      "list": {
+        "name": "Lista"
+      }
+    },
+    "sensor": {
+      "shopping_list_sync": {
+        "name": "Synchronizacja listy zakupów",
+        "state": {
+          "conflict": "Wymaga rozstrzygnięcia",
+          "confirmation_required": "Potwierdź scalenie list",
+          "synchronized": "Zsynchronizowano",
+          "list_unavailable": "Lista Listonic niedostępna",
+          "shopping_list_missing": "Skonfiguruj listę zakupów HA",
+          "target_changed": "Zmieniono lokalną listę zakupów",
+          "pending": "Oczekuje na synchronizację",
+          "storage_error": "Błąd zapisanych danych",
+          "shelved": "Oczekujące zmiany poprzedniej listy"
+        }
+      }
+    }
+  },
+  "options": {
+    "abort": {
+      "already_configured": "To konto Listonic jest już skonfigurowane.",
+      "no_lists": "Utwórz listę w Listonic, a następnie ponownie dodaj integrację.",
+      "reauth_successful": "Sesja Listonic została odnowiona.",
+      "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
+      "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
+      "storage_error": "Nie można bezpiecznie odczytać zapisanych mapowań synchronizacji. Zachowaj plik danych i sprawdź jego kopię zapasową."
+    },
+    "error": {
+      "invalid_auth": "Listonic odrzucił e-mail lub hasło.",
+      "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
+      "select_list": "Wybierz co najmniej jedną listę Listonic.",
+      "invalid_email": "Podaj poprawny adres e-mail.",
+      "wrong_account": "Zaloguj się na konto już skonfigurowane w tej integracji.",
+      "invalid_selection": "Wybierz dostępne listy i wskaż cel listy zakupów spośród wybranych list.",
+      "shopping_list_missing": "Najpierw skonfiguruj i uruchom wbudowaną listę zakupów Home Assistant.",
+      "confirm_merge": "Potwierdź opisany sposób scalenia list.",
+      "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
+      "resolve_before_switch": "Rozstrzygnij niepewne zapisy starego powiązania przed zmianą listy docelowej."
+    },
+    "step": {
+      "bridge": {
+        "description": "Home Assistant: {local_count} pozycji. Listonic „{list_name}”: {remote_count} pozycji. Pierwsze scalenie zachowa wszystkie pozycje z obu list, także powtarzające się nazwy. Kolejne zmiany będą synchronizowane w obie strony. Przy zmianie listy oczekujące zmiany starego powiązania pozostaną zapisane dla starej listy. [Skonfiguruj listę zakupów Home Assistant](https://my.home-assistant.io/redirect/config_flow_start/?domain=shopping_list). Liczba pozycji pozostających przy starym powiązaniu: {held_count}. Nie zostaną wysłane na nową listę.",
+        "title": "Połącz listy zakupów",
+        "data": {
+          "confirm": "Scal obie listy i włącz synchronizację"
+        }
+      },
+      "init": {
+        "title": "Wybierz listy",
+        "description": "Wybierz listy Listonic, które chcesz dodać do Home Assistant.",
+        "data": {
+          "list_ids": "Listy Listonic",
+          "shopping_list_id": "Użyj jako listy zakupów Home Assistant"
+        }
+      }
+    }
+  },
+  "issues": {
+    "conflict": {
+      "title": "Wymaga rozstrzygnięcia",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "target_changed": {
+      "title": "Zmieniono lokalną listę zakupów",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "confirmation_required": {
+      "title": "Potwierdź scalenie list",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "shopping_list_missing": {
+      "title": "Skonfiguruj listę zakupów HA",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "storage_error": {
+      "title": "Błąd zapisanych danych",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "list_unavailable": {
+      "title": "Lista Listonic niedostępna",
+      "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    }
+  },
+  "services": {
+    "get_lists": {
+      "name": "Odczytaj listy i produkty",
+      "description": "Zwraca wszystkie dostępne aktywne listy i produkty konta, w tym identyfikatory i metadane.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        }
+      }
+    },
+    "create_list": {
+      "name": "Utwórz listę",
+      "description": "Tworzy listę w chmurze. Na żądanie zwraca list_id. Wybierz ją w opcjach integracji, aby utworzyć encję todo.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "name": {
+          "name": "Nazwa"
+        }
+      }
+    },
+    "rename_list": {
+      "name": "Zmień nazwę listy",
+      "description": "Zmienia nazwę listy o wskazanym identyfikatorze.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "list_id": {
+          "name": "ID listy Listonic"
+        },
+        "name": {
+          "name": "Nazwa"
+        }
+      }
+    },
+    "delete_list": {
+      "name": "Dezaktywuj listę",
+      "description": "Dezaktywuje listę przez Active:0. Jej encja todo stanie się niedostępna. Nie oznacza potwierdzonego trwałego usunięcia.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "list_id": {
+          "name": "ID listy Listonic"
+        }
+      }
+    },
+    "add_item": {
+      "name": "Dodaj produkt",
+      "description": "Dodaje produkt z opcjonalnymi metadanymi. Na żądanie zwraca item_id.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "list_id": {
+          "name": "ID listy Listonic"
+        },
+        "name": {
+          "name": "Nazwa"
+        },
+        "amount": {
+          "name": "Ilość"
+        },
+        "unit": {
+          "name": "Jednostka"
+        },
+        "description": {
+          "name": "Opis"
+        },
+        "price": {
+          "name": "Cena"
+        }
+      }
+    },
+    "update_item": {
+      "name": "Zmień produkt",
+      "description": "Zmienia wyłącznie podane pola. Pusta ilość, jednostka lub opis czyści pole. Cena 0 zeruje jej wartość.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "list_id": {
+          "name": "ID listy Listonic"
+        },
+        "item_id": {
+          "name": "ID produktu Listonic"
+        },
+        "name": {
+          "name": "Nazwa"
+        },
+        "checked": {
+          "name": "Kupione"
+        },
+        "amount": {
+          "name": "Ilość"
+        },
+        "unit": {
+          "name": "Jednostka"
+        },
+        "description": {
+          "name": "Opis"
+        },
+        "price": {
+          "name": "Cena"
+        }
+      }
+    },
+    "delete_item": {
+      "name": "Usuń produkt",
+      "description": "Usuwa z listy produkt o wskazanym identyfikatorze.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "list_id": {
+          "name": "ID listy Listonic"
+        },
+        "item_id": {
+          "name": "ID produktu Listonic"
+        }
+      }
+    }
+  },
+  "selector": {
+    "shopping_list": {
+      "options": {
+        "none": "Nie łącz"
+      }
+    }
+  }
+}

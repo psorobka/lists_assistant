@@ -1,0 +1,6 @@
+pytest-homeassistant-custom-component==0.13.316
+pytest-cov==7.0.0
+aioresponses==0.7.9
+ruff==0.16.9
+hassil==3.5.0
+home-assistant-intents==2026.1.28

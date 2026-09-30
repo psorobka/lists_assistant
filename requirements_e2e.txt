@@ -1,0 +1,8 @@
+-r requirements_test.txt
+home-assistant-frontend==20260128.6
+playwright==1.63.0
+PyTurboJPEG==1.8.0
+mutagen==1.47.0
+ha-ffmpeg==3.2.2
+pymicro-vad==1.0.1
+pyspeex-noise==1.0.2

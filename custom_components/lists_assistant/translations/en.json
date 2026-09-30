@@ -1,0 +1,277 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Listonic",
+        "description": "Sign in with your Listonic account. Your password is used only to obtain API tokens and is not stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "lists": {
+        "title": "Choose your lists",
+        "description": "Select the Listonic lists you want to add to Home Assistant.",
+        "data": {
+          "list_ids": "Listonic lists",
+          "shopping_list_id": "Use as Home Assistant Shopping List"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect to Listonic",
+        "description": "Sign in to the same Listonic account. Your selected lists and entity names will be preserved.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "bridge": {
+        "description": "Home Assistant: {local_count} items. Listonic “{list_name}”: {remote_count} items. The first merge keeps every item from both lists, including repeated names. Subsequent changes synchronize both ways. If changing lists, pending changes for the previous binding remain saved for that previous list. Configure the built-in Shopping List integration in Home Assistant settings. Items retained for the previous binding: {held_count}. These will not be sent to the new list.",
+        "title": "Connect your shopping lists",
+        "data": {
+          "confirm": "Merge both lists and enable synchronization"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The email or password was rejected.",
+      "cannot_connect": "Could not connect to Listonic. Try again.",
+      "select_list": "Select at least one Listonic list.",
+      "invalid_email": "Enter a valid email address.",
+      "wrong_account": "Sign in to the account already configured for this integration.",
+      "invalid_selection": "Choose available lists and select the Shopping List target from your selected lists.",
+      "shopping_list_missing": "Configure and start the built-in Home Assistant Shopping List first.",
+      "confirm_merge": "Confirm the described merge policy.",
+      "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
+      "resolve_before_switch": "Resolve uncertain writes for the previous binding before changing the target list."
+    },
+    "abort": {
+      "already_configured": "This Listonic account is already configured.",
+      "no_lists": "Create a list in Listonic, then add the integration again.",
+      "reauth_successful": "Your Listonic session has been renewed.",
+      "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
+      "cannot_connect": "Could not connect to Listonic. Try again.",
+      "storage_error": "Stored synchronization mappings could not be read safely. Preserve the data file and check its backup."
+    }
+  },
+  "entity": {
+    "todo": {
+      "list": {
+        "name": "List"
+      }
+    },
+    "sensor": {
+      "shopping_list_sync": {
+        "name": "Shopping List synchronization",
+        "state": {
+          "conflict": "Needs resolution",
+          "confirmation_required": "Confirm the list merge",
+          "synchronized": "Synchronized",
+          "list_unavailable": "Listonic list unavailable",
+          "shopping_list_missing": "Configure HA Shopping List",
+          "target_changed": "Local Shopping List changed",
+          "pending": "Waiting for synchronization",
+          "storage_error": "Stored synchronization data error",
+          "shelved": "Pending changes for a previous list"
+        }
+      }
+    }
+  },
+  "options": {
+    "abort": {
+      "already_configured": "This Listonic account is already configured.",
+      "no_lists": "Create a list in Listonic, then add the integration again.",
+      "reauth_successful": "Your Listonic session has been renewed.",
+      "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
+      "cannot_connect": "Could not connect to Listonic. Try again.",
+      "storage_error": "Stored synchronization mappings could not be read safely. Preserve the data file and check its backup."
+    },
+    "error": {
+      "invalid_auth": "The email or password was rejected.",
+      "cannot_connect": "Could not connect to Listonic. Try again.",
+      "select_list": "Select at least one Listonic list.",
+      "invalid_email": "Enter a valid email address.",
+      "wrong_account": "Sign in to the account already configured for this integration.",
+      "invalid_selection": "Choose available lists and select the Shopping List target from your selected lists.",
+      "shopping_list_missing": "Configure and start the built-in Home Assistant Shopping List first.",
+      "confirm_merge": "Confirm the described merge policy.",
+      "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
+      "resolve_before_switch": "Resolve uncertain writes for the previous binding before changing the target list."
+    },
+    "step": {
+      "bridge": {
+        "description": "Home Assistant: {local_count} items. Listonic “{list_name}”: {remote_count} items. The first merge keeps every item from both lists, including repeated names. Subsequent changes synchronize both ways. If changing lists, pending changes for the previous binding remain saved for that previous list. Configure the built-in Shopping List integration in Home Assistant settings. Items retained for the previous binding: {held_count}. These will not be sent to the new list.",
+        "title": "Connect your shopping lists",
+        "data": {
+          "confirm": "Merge both lists and enable synchronization"
+        }
+      },
+      "init": {
+        "title": "Choose your lists",
+        "description": "Select the Listonic lists you want to add to Home Assistant.",
+        "data": {
+          "list_ids": "Listonic lists",
+          "shopping_list_id": "Use as Home Assistant Shopping List"
+        }
+      }
+    }
+  },
+  "issues": {
+    "conflict": {
+      "title": "Needs resolution",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "target_changed": {
+      "title": "Local Shopping List changed",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "confirmation_required": {
+      "title": "Confirm the list merge",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "shopping_list_missing": {
+      "title": "Configure HA Shopping List",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "storage_error": {
+      "title": "Stored synchronization data error",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "list_unavailable": {
+      "title": "Listonic list unavailable",
+      "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    }
+  },
+  "services": {
+    "get_lists": {
+      "name": "Read lists and products",
+      "description": "Return all accessible active lists and products for this account, including their IDs and metadata.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        }
+      }
+    },
+    "create_list": {
+      "name": "Create a list",
+      "description": "Create a cloud list. Returns list_id when a response is requested. Select it in integration options to add its todo entity.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "name": {
+          "name": "Name"
+        }
+      }
+    },
+    "rename_list": {
+      "name": "Rename a list",
+      "description": "Rename the list with the specified numeric ID.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "list_id": {
+          "name": "Listonic list ID"
+        },
+        "name": {
+          "name": "Name"
+        }
+      }
+    },
+    "delete_list": {
+      "name": "Deactivate a list",
+      "description": "Deactivate the list using Active:0. Its todo entity becomes unavailable. This is not a confirmed permanent deletion.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "list_id": {
+          "name": "Listonic list ID"
+        }
+      }
+    },
+    "add_item": {
+      "name": "Add a product",
+      "description": "Add a product with optional metadata. Returns item_id when a response is requested.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "list_id": {
+          "name": "Listonic list ID"
+        },
+        "name": {
+          "name": "Name"
+        },
+        "amount": {
+          "name": "Quantity"
+        },
+        "unit": {
+          "name": "Unit"
+        },
+        "description": {
+          "name": "Description"
+        },
+        "price": {
+          "name": "Price"
+        }
+      }
+    },
+    "update_item": {
+      "name": "Update a product",
+      "description": "Change only the supplied fields. Empty amount, unit or description clears that field. Price 0 sets the price to zero.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "list_id": {
+          "name": "Listonic list ID"
+        },
+        "item_id": {
+          "name": "Listonic product ID"
+        },
+        "name": {
+          "name": "Name"
+        },
+        "checked": {
+          "name": "Completed"
+        },
+        "amount": {
+          "name": "Quantity"
+        },
+        "unit": {
+          "name": "Unit"
+        },
+        "description": {
+          "name": "Description"
+        },
+        "price": {
+          "name": "Price"
+        }
+      }
+    },
+    "delete_item": {
+      "name": "Delete a product",
+      "description": "Delete the product with the specified numeric ID from this list.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "list_id": {
+          "name": "Listonic list ID"
+        },
+        "item_id": {
+          "name": "Listonic product ID"
+        }
+      }
+    }
+  },
+  "selector": {
+    "shopping_list": {
+      "options": {
+        "none": "No bridge"
+      }
+    }
+  }
+}
