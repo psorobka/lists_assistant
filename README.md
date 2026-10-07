@@ -51,29 +51,6 @@ Szczegóły: [konfiguracja, konflikty i offline](docs/shopping-list.md).
 Akcje mają nazwy `lists_assistant.get_lists`, `lists_assistant.add_item` itd.
 [Dokumentacja akcji i przykłady YAML](docs/actions.md).
 
-## Przejście z testowej integracji listonic
-
-Wydanie 1.0.0 zmienia domenę z `listonic` na `lists_assistant`. Nie ma automatycznej
-migracji wpisów konfiguracji, encji ani kolejki zapisów z wersji rozwojowych.
-
-1. Zrób pełną kopię zapasową HA, w tym `.storage`. W starej integracji rozwiąż
-   konflikty i niepewne zapisy oraz poczekaj na opróżnienie kolejki. Jeżeli nie
-   jest to możliwe, zachowaj starą instalację do czasu rozstrzygnięcia operacji.
-2. Wyłącz starą integrację i zrestartuj HA, aby zatrzymać synchronizację.
-   Nie uruchamiaj obu integracji jednocześnie z tym samym Shopping List.
-3. Zainstaluj Lists Assistant i skonfiguruj konto ponownie. Początkowo wybierz
-   same encje `todo`, bez powiązania Shopping List.
-4. Przed włączeniem bridge przygotuj stan obu list. Nowa integracja nie zna
-   dawnych mapowań: scalenie dwóch identycznych list może zdublować produkty.
-   Po wykonaniu kopii można pozostawić pełną listę po jednej stronie i pustą
-   po drugiej; nie opróżniaj list przy działającej starej synchronizacji.
-5. W opcjach włącz bridge, sprawdź liczby produktów i potwierdź scalenie.
-   Zaktualizuj automatyzacje z `listonic.*` na `lists_assistant.*` i sprawdź ID encji.
-
-Starych plików `.storage/listonic_bridge.*` nie usuwaj ani nie przemianowuj
-ręcznie. Wartość `choose: listonic` w rozstrzyganiu konfliktów nadal oznacza
-wersję produktu po stronie Listonic i pozostaje bez zmian.
-
 ## Rozwój i weryfikacja
 
 Testy uruchamiaj w Linux/WSL na Pythonie 3.13, w linuksowym venv:
