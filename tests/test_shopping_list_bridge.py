@@ -131,6 +131,7 @@ async def test_full_bidirectional_crud_and_bulk(hass, native_shopping, api, clou
     sensor_id = er.async_get(hass).async_get_entity_id(
         "sensor", DOMAIN, f"{entry.unique_id}:shopping_list_sync"
     )
+    assert sensor_id == "sensor.shopping_list_synchronization"
     assert hass.states.get(sensor_id).state == "synchronized"
 
     await todo(hass, native_shopping, "add_item", item="Mleko")
@@ -195,6 +196,22 @@ async def test_first_merge_preserves_all_duplicates_and_restart(
     assert len(cloud["1"]["Items"]) == 4
     assert len(await local_items(hass, native_shopping)) == 4
     assert bridge.status == "synchronized"
+
+
+async def test_import_skips_unchanged_listonic_readback(
+    hass, native_shopping, api, cloud
+):
+    cloud["1"]["Items"] = [
+        {"Id": str(item_id), "Name": f"Item {item_id}", "Checked": 0}
+        for item_id in range(201, 204)
+    ]
+
+    bridge = await setup(hass, account(hass))
+
+    assert bridge.status == "synchronized"
+    # One initial snapshot and one pre-write freshness check per imported item.
+    # Local todo writes do not need the extra unchanged Listonic readback.
+    assert api.lists.await_count == 4
 
 
 async def test_offline_queue_survives_unload_and_recovery(

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(hass, entry) -> bool:
     """Set up a configured Listonic account."""
@@ -49,6 +53,7 @@ async def async_setup_entry(hass, entry) -> bool:
 
     async_register_services(hass)
     register_account_services(hass)
+    _LOGGER.info("Listonic account set up (config entry %s)", entry.entry_id)
     return True
 
 
@@ -71,4 +76,5 @@ async def async_unload_entry(hass, entry) -> bool:
     if not hass.data[DOMAIN]:
         async_remove_services(hass)
         remove_account_services(hass)
+    _LOGGER.info("Listonic account unloaded (config entry %s)", entry.entry_id)
     return True

@@ -1,6 +1,7 @@
 """Synchronize the native Shopping List through public todo actions/events."""
 
 import asyncio
+import logging
 from copy import deepcopy
 from time import monotonic
 
@@ -16,6 +17,8 @@ from .api import AmbiguousWrite, ApiError, identifier
 from .bridge_store import BridgeStorageError, BridgeStore
 from .const import CONF_BRIDGE_CONFIRMED, DOMAIN, settings
 from .reconcile import plan_changes, value
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class StalePlan(Exception):
@@ -70,6 +73,7 @@ class ShoppingListBridge:
                     operation["state"] = "uncertain"
             await self.store.save()
         except BridgeStorageError:
+            _LOGGER.error("Shopping List bridge storage could not be loaded")
             self._storage_failed = True
             self._set_status("storage_error")
             return
@@ -79,6 +83,9 @@ class ShoppingListBridge:
             self.hass.bus.async_listen(EVENT_STATE_CHANGED, self._state_event),
         ]
         self.request_sync()
+        _LOGGER.info(
+            "Shopping List bridge started for config entry %s", self.entry.entry_id
+        )
 
     @callback
     def _local_event(self, event):
@@ -119,15 +126,21 @@ class ShoppingListBridge:
             if self._dirty:
                 self._schedule_retry(0.1)
         except BridgeStorageError:
+            _LOGGER.error("Shopping List bridge stopped because its storage failed")
             self._storage_failed = True
             self._set_status("storage_error")
         except HomeAssistantError:
+            _LOGGER.warning(
+                "Shopping List bridge cannot access the native Shopping List"
+            )
             self._set_status("shopping_list_missing")
         finally:
             self._task = None
 
     @callback
     def _set_status(self, status):
+        if status != self.status:
+            _LOGGER.debug("Shopping List bridge status changed: %s", status)
         self.status = status
         issue_id = f"shopping_list_{self.entry.entry_id}"
         if status in (
@@ -191,6 +204,7 @@ class ShoppingListBridge:
         return held
 
     async def _sync(self):
+        _LOGGER.debug("Reconciling Listonic and Shopping List snapshots")
         if settings(self.entry).get(CONF_BRIDGE_CONFIRMED) != self.list_id:
             self._set_status("confirmation_required")
             return
@@ -240,6 +254,11 @@ class ShoppingListBridge:
         self.state["pending"].update(uncertain)
         await self.store.save()
         if uncertain or self.state["conflicts"]:
+            _LOGGER.warning(
+                "Shopping List bridge has %s conflicts and %s uncertain writes",
+                len(self.state["conflicts"]),
+                len(uncertain),
+            )
             self._set_status("conflict")
             return
         if not self.coordinator.last_update_success:
@@ -260,15 +279,21 @@ class ShoppingListBridge:
         )
         await self.store.save()  # Write-ahead checkpoint precedes every side effect.
         try:
-            await self.coordinator.async_mutate(lambda: self._apply(operation))
+            await self.coordinator.async_mutate(
+                lambda: self._apply(operation),
+                refresh=operation["direction"] != "local",
+            )
         except StalePlan:
+            _LOGGER.debug("Shopping List bridge plan became stale; recalculating")
             operation["state"] = "queued"
             await self.coordinator.async_refresh()
             self._dirty = True
         except (AmbiguousWrite, HomeAssistantError):
+            _LOGGER.error("Shopping List bridge write result is uncertain")
             operation["state"] = "uncertain"
             self._set_status("conflict")
         except ApiError:
+            _LOGGER.warning("Shopping List bridge operation failed; scheduling a retry")
             operation["state"] = "queued"
             self._failures += 1
             self._retry_at = monotonic() + min(300, 5 * 2 ** min(self._failures, 6))
@@ -472,6 +497,9 @@ class ShoppingListBridge:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        _LOGGER.info(
+            "Shopping List bridge stopped for config entry %s", self.entry.entry_id
+        )
 
     def details(self):
         """Explicit troubleshooting action, separate from anonymized diagnostics."""

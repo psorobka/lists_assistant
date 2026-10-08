@@ -2,58 +2,61 @@
 
 ![Lists Assistant](brand/icon.png)
 
-Integracja Home Assistant z listami zakupów Listonic. Wersja **1.0.0**,
-domena **`lists_assistant`**. Wymagany Home Assistant **2026.2.3 lub nowszy**.
+Home Assistant integration for Listonic shopping lists. Version **1.0.0**,
+domain **`lists_assistant`**. Requires Home Assistant **2026.2.3 or newer**.
 
-## Funkcje
+English is the default language. Polish translations are included.
 
-- Osobna encja `todo` dla każdej wybranej listy Listonic.
-- Dwukierunkowa synchronizacja jednej listy z wbudowaną Shopping List HA
-  i standardowymi komendami zakupów Assist.
-- Tworzenie, zmiana nazwy i dezaktywacja list oraz zarządzanie produktami,
-  w tym ilością, jednostką, opisem i ceną.
-- Trwała kolejka offline, rozpoznawanie konfliktów i obsługa niepewnych zapisów.
-- Konfiguracja i ponowne logowanie przez UI, sensor synchronizacji,
-  diagnostyka oraz polskie i angielskie tłumaczenia.
+## Features
 
-To niezależny projekt społecznościowy korzystający z API aplikacji Listonic.
-Nie jest oficjalną integracją producenta; zmiany jego API mogą wymagać aktualizacji.
+- A separate `todo` entity for each selected Listonic list.
+- Two-way synchronization between one Listonic list and the built-in Home
+  Assistant Shopping List, including standard Assist shopping commands.
+- Create, rename, and deactivate lists; manage products, including quantity,
+  unit, description, and price.
+- Persistent offline queue, conflict detection, and recovery from uncertain writes.
+- UI setup and reauthentication, a synchronization sensor, diagnostics, and
+  English and Polish translations.
 
-## Instalacja przez HACS
+This is an independent community project that uses the Listonic app API. It is
+not an official integration from the manufacturer; API changes may require updates.
 
-1. W HACS otwórz menu **Custom repositories / Niestandardowe repozytoria**.
-2. Dodaj `https://github.com/psorobka/lists_assistant` z kategorią **Integration**.
-3. Wyszukaj **Lists Assistant**, pobierz wydanie i uruchom ponownie Home Assistant.
-4. W **Ustawienia → Urządzenia i usługi → Dodaj integrację** wybierz
-   **Lists Assistant** i zaloguj się do Listonic.
-5. Wybierz listy, które mają być widoczne jako encje `todo`.
+## Install with HACS
 
-Repozytorium można dodać ręcznie do HACS; obecność w domyślnym katalogu HACS
-wymaga osobnego zgłoszenia i akceptacji.
+1. In HACS, open **Custom repositories**.
+2. Add `https://github.com/psorobka/lists_assistant` with the **Integration**
+   category.
+3. Find **Lists Assistant**, download the release, and restart Home Assistant.
+4. Go to **Settings → Devices & services → Add integration**, choose
+   **Lists Assistant**, and sign in to Listonic.
+5. Select the lists you want to expose as `todo` entities.
 
-## Instalacja ręczna
+You can add the repository to HACS manually. Inclusion in the default HACS
+catalog requires a separate submission and approval.
 
-Z [wydania GitHub](https://github.com/psorobka/lists_assistant/releases)
-pobierz archiwum źródeł. Skopiuj katalog `custom_components/lists_assistant`
-do `/config/custom_components/lists_assistant` w Home Assistant, a następnie
-uruchom HA ponownie i dodaj integrację przez UI.
+## Manual installation
 
-## Shopping List i Assist
+Download the source archive from [GitHub releases](https://github.com/psorobka/lists_assistant/releases).
+Copy `custom_components/lists_assistant` to
+`/config/custom_components/lists_assistant` in Home Assistant, restart Home
+Assistant, and add the integration through the UI.
 
-Włącz wbudowaną integrację **Shopping List**. Podczas konfiguracji Lists Assistant
-wybierz listę do synchronizacji i potwierdź pierwsze scalenie. Każdy istniejący
-produkt z obu stron zostanie zachowany, także produkty o takich samych nazwach.
-Jedna integracja może być właścicielem Shopping List. Powiązanie można zmienić
-w opcjach; zatrzymane operacje pozostają przypisane do poprzedniego celu.
+## Shopping List and Assist
 
-Po połączeniu list można użyć komendy Assist „Dodaj mleko do listy zakupów”.
-Szczegóły: [konfiguracja, konflikty i offline](docs/shopping-list.md).
-Akcje mają nazwy `lists_assistant.get_lists`, `lists_assistant.add_item` itd.
-[Dokumentacja akcji i przykłady YAML](docs/actions.md).
+Enable the built-in **Shopping List** integration. During Lists Assistant setup,
+choose a list to synchronize and confirm the initial merge. Every existing item
+from both sides is kept, including items with identical names. One integration
+can own the Shopping List. You can change the linked list in the options; queued
+operations remain assigned to their previous target.
 
-## Rozwój i weryfikacja
+After linking the lists, you can use the Assist command “Add milk to the shopping
+list”. See [setup, conflicts, and offline behavior](docs/shopping-list.md).
+Actions are named `lists_assistant.get_lists`, `lists_assistant.add_item`, and
+so on. See [action documentation and YAML examples](docs/actions.md).
 
-Testy uruchamiaj w Linux/WSL na Pythonie 3.13, w linuksowym venv:
+## Development and verification
+
+Run tests on Linux or WSL with Python 3.13 in a Linux virtual environment:
 
 ```sh
 python -m pip install -r requirements_test.txt
@@ -62,20 +65,21 @@ ruff format --no-cache --check .
 python -m pytest -q --timeout=30 --cov=custom_components/lists_assistant --cov-report=term-missing --cov-fail-under=90
 ```
 
-CI zawiera Ruff, pytest z progiem 90%, Chromium E2E, Hassfest i HACS.
-Automatyczne testy używają fikcyjnego serwera Listonic.
-[Uruchomienie i zakres E2E](docs/e2e.md), [przygotowanie wydania](docs/releasing.md),
-[historia zmian](CHANGELOG.md), [mapa pracy](docs/agent-workflow.md).
+CI runs Ruff, pytest with a 90% coverage threshold, Chromium E2E, Hassfest, and
+HACS checks. Automated tests use a fake Listonic server.
+See [E2E setup and scope](docs/e2e.md), [release preparation](docs/releasing.md),
+[changelog](CHANGELOG.md), and the [work map](docs/agent-workflow.md).
 
-Pełny restart procesu HA, test długotrwały i reauth przez UI pozostają osobnymi
-obszarami do weryfikacji. Historyczne testy rzeczywistego API opisano w
-[raporcie live](docs/api/live-validation.md); skrypty `scripts/live_*` zmieniają
-prawdziwe konto i nie są częścią automatycznych kontroli wydania.
+A full Home Assistant process restart, a long-running test, and UI
+reauthentication remain separate verification areas. Historical tests against
+the real API are described in the [live report](docs/api/live-validation.md);
+the `scripts/live_*` scripts modify a real account and are not part of automated
+release checks.
 
-## Pomoc i licencja
+## Support and license
 
-[Zgłoszenia błędów](https://github.com/psorobka/lists_assistant/issues).
-Do zgłoszenia dołącz wersje HA i integracji oraz zanonimizowany opis problemu.
-Nie publikuj haseł, tokenów ani plików `.storage`.
+Report issues at [GitHub Issues](https://github.com/psorobka/lists_assistant/issues).
+Include your Home Assistant and integration versions and an anonymized problem
+description. Do not publish passwords, tokens, or `.storage` files.
 
-[Licencja MIT](LICENSE). Dokumentacja kontraktu API: [docs/api](docs/api/README.md).
+[MIT License](LICENSE). API contract documentation: [docs/api](docs/api/README.md).
