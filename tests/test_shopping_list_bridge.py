@@ -470,6 +470,28 @@ async def test_target_change_shelves_old_pending_ids(hass, native_shopping, api,
     assert not cloud["1"]["Items"]
 
 
+async def test_options_adds_shopping_list_to_selected_lists(hass, native_shopping, api):
+    entry = account(hass)
+    await setup(hass, entry)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_LISTS: ["1"],
+            CONF_BRIDGE: "3",
+        },
+    )
+    assert result["step_id"] == "bridge"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"confirm": True}
+    )
+
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_LISTS] == ["1", "3"]
+    assert result["data"][CONF_BRIDGE] == "3"
+
+
 async def test_disconnect_keeps_items_and_queue(hass, native_shopping, api, cloud):
     entry = account(hass)
     bridge = await setup(hass, entry)

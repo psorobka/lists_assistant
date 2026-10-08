@@ -172,22 +172,26 @@ class ListonicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not options:
             return self.async_abort(reason="no_lists")
         if user_input is not None:
-            selected = user_input[CONF_LISTS]
-            if not selected:
-                return self.async_show_form(
-                    step_id="lists",
-                    data_schema=self._schema(options),
-                    errors={"base": "select_list"},
-                )
+            selected = list(user_input[CONF_LISTS])
             bridge = user_input.get(CONF_BRIDGE, "none")
             if any(key not in options for key in selected) or (
-                bridge != "none" and bridge not in selected
+                bridge != "none" and bridge not in options
             ):
                 return self.async_show_form(
                     step_id="lists",
                     data_schema=self._schema(options),
                     errors={"base": "invalid_selection"},
                 )
+            if not selected:
+                if bridge == "none":
+                    return self.async_show_form(
+                        step_id="lists",
+                        data_schema=self._schema(options),
+                        errors={"base": "select_list"},
+                    )
+                selected.append(bridge)
+            elif bridge != "none" and bridge not in selected:
+                selected.append(bridge)
             if bridge != "none" and bridge_in_use(self.hass):
                 return self.async_show_form(
                     step_id="lists",
@@ -282,19 +286,23 @@ class ListonicOptionsFlow(config_entries.OptionsFlowWithReload):
             return self.async_abort(reason="no_lists")
         errors = {}
         if user_input is not None:
-            selected = user_input[CONF_LISTS]
+            selected = list(user_input[CONF_LISTS])
             bridge = user_input.get(CONF_BRIDGE, "none")
-            if not selected:
-                errors["base"] = "select_list"
-            elif any(key not in options for key in selected) or (
-                bridge != "none" and bridge not in selected
+            if any(key not in options for key in selected) or (
+                bridge != "none" and bridge not in options
             ):
                 errors["base"] = "invalid_selection"
-            elif bridge != "none" and bridge_in_use(
-                self.hass, self.config_entry.entry_id
+            elif not selected and bridge == "none":
+                errors["base"] = "select_list"
+            elif bridge != "none" and bridge in options and bridge not in selected:
+                selected.append(bridge)
+            if (
+                not errors
+                and bridge != "none"
+                and bridge_in_use(self.hass, self.config_entry.entry_id)
             ):
                 errors["base"] = "bridge_in_use"
-            else:
+            if not errors:
                 self._selection = {CONF_LISTS: selected, CONF_BRIDGE: bridge}
                 if bridge != "none":
                     return await self.async_step_bridge()

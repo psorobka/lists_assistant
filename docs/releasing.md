@@ -16,9 +16,10 @@ Nazwa w UI: **Lists Assistant**; domena: `lists_assistant`.
 4. Wyślij przygotowany commit do GitHub i poczekaj na zielone CI, w tym
    Hassfest i HACS. HACS sprawdza również metadane zdalnego repozytorium;
    lokalna kontrola plików ich nie zastępuje.
-5. Utwórz tag `v1.0.0` na sprawdzonym commicie i GitHub Release o tytule
-   `Lists Assistant 1.0.0`. Użyj treści sekcji 1.0.0 z `CHANGELOG.md`.
-   Sprawdź CI uruchomione dla taga przed publikacją finalnego wydania.
+5. Odczytaj wersję z `custom_components/lists_assistant/manifest.json`.
+   Utwórz odpowiadający jej tag (`vX.Y.Z`) i szkic GitHub Release o tytule
+   `Lists Assistant X.Y.Z`. Użyj treści pasującej sekcji z `CHANGELOG.md`.
+   Sprawdź CI uruchomione dla taga, a po jego powodzeniu opublikuj szkic release.
 
 HACS pobiera `custom_components/lists_assistant` z repozytorium wskazanego przez
 tag wydania. Nie potrzeba osobnego ZIP-a ani `zip_release` w `hacs.json`.

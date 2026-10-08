@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Allow the selected Listonic shopping-list target to be the only selected list
+  in the configuration flow.
+
 ## 1.0.0
 
 First release of Lists Assistant for Home Assistant, connecting Listonic lists
