@@ -29,6 +29,7 @@ class BridgeStatusSensor(SensorEntity):
     """Keep pending/conflict state visible even when the cloud is unavailable."""
 
     _attr_has_entity_name = True
+    _attr_suggested_object_id = "shopping_list_synchronization"
     _attr_translation_key = "shopping_list_sync"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_entity_category = EntityCategory.DIAGNOSTIC

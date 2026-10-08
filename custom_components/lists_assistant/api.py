@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import math
 from collections.abc import Awaitable, Callable
 from decimal import Decimal, InvalidOperation
@@ -14,6 +15,8 @@ from uuid import uuid4
 import aiohttp
 
 from .const import BASE_URL, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
@@ -92,6 +95,7 @@ class ListonicClient:
         return headers
 
     async def _exchange(self, provider: str, data: dict[str, str]) -> None:
+        _LOGGER.debug("Exchanging Listonic credentials using %s", provider)
         try:
             async with self.session.post(
                 f"{self.base_url}/api/loginextended",
@@ -101,18 +105,33 @@ class ListonicClient:
                 timeout=aiohttp.ClientTimeout(total=20),
             ) as response:
                 if response.status in (400, 401, 403):
+                    _LOGGER.warning(
+                        "Listonic authentication was rejected (HTTP %s)",
+                        response.status,
+                    )
                     raise AuthError("Authentication rejected")
                 if response.status != 200:
+                    _LOGGER.error(
+                        "Listonic authentication failed (HTTP %s)", response.status
+                    )
                     raise ApiError(f"Authentication service HTTP {response.status}")
                 payload = await response.json()
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            _LOGGER.error(
+                "Listonic authentication request failed: %s", type(err).__name__
+            )
             raise ApiError("Authentication service unavailable") from err
         if not isinstance(payload, dict) or not payload.get("access_token"):
+            _LOGGER.error("Listonic returned an invalid token response")
             raise ApiError("Invalid token response")
         # Some refresh responses omit refresh_token. Keep the previous one.
         self.tokens.update({k: v for k, v in payload.items() if v is not None})
         if self.on_tokens:
             await self.on_tokens(dict(self.tokens))
+        if provider == "password":
+            _LOGGER.info("Listonic authentication succeeded")
+        else:
+            _LOGGER.debug("Listonic access token refreshed")
 
     async def login(self, email: str, password: str) -> None:
         """Authenticate once; the caller must not persist the password."""
@@ -147,6 +166,12 @@ class ListonicClient:
         refreshed = False
         for attempt in range(3):
             token = self.tokens.get("access_token")
+            _LOGGER.debug(
+                "Listonic API request: %s %s (attempt %s)",
+                method,
+                path,
+                attempt + 1,
+            )
             try:
                 async with self.session.request(
                     method,
@@ -158,15 +183,31 @@ class ListonicClient:
                 ) as response:
                     if response.status == 401:
                         if refreshed:
+                            _LOGGER.error(
+                                "Listonic rejected the session after token refresh"
+                            )
                             raise AuthError("Session rejected after refresh")
+                        _LOGGER.debug(
+                            "Listonic rejected the access token; refreshing it"
+                        )
                         await self.refresh(token)
                         refreshed = True
                         continue
                     if response.status == 403:
+                        _LOGGER.warning("Listonic denied access to %s %s", method, path)
                         raise ForbiddenError("Access denied")
                     if response.status == 404:
+                        _LOGGER.warning(
+                            "Listonic resource was not found: %s %s", method, path
+                        )
                         raise NotFoundError("Resource not found")
                     if response.status == 429 or response.status >= 500:
+                        _LOGGER.warning(
+                            "Listonic API returned HTTP %s for %s %s",
+                            response.status,
+                            method,
+                            path,
+                        )
                         if method != "GET":
                             if response.status >= 500:
                                 raise AmbiguousWrite("Write result is unknown")
@@ -184,12 +225,24 @@ class ListonicClient:
                         await asyncio.sleep(max(0, delay))
                         continue
                     if response.status not in (200, 201, 204):
+                        _LOGGER.error(
+                            "Listonic API request failed with HTTP %s: %s %s",
+                            response.status,
+                            method,
+                            path,
+                        )
                         raise ApiError(f"API HTTP {response.status}")
                     body = await response.read()
                     if not body:
                         return None
                     return await response.json()
             except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+                _LOGGER.warning(
+                    "Listonic API request failed: %s %s (%s)",
+                    method,
+                    path,
+                    type(err).__name__,
+                )
                 if method != "GET":
                     raise AmbiguousWrite("Write result is unknown") from err
                 raise ApiError("API unavailable or invalid response") from err
