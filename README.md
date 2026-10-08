@@ -2,7 +2,7 @@
 
 ![Lists Assistant](brand/icon.png)
 
-Home Assistant integration for Listonic shopping lists. Version **1.0.0**,
+Home Assistant integration for Listonic shopping lists. Version **1.0.1**,
 domain **`lists_assistant`**. Requires Home Assistant **2026.2.3 or newer**.
 
 English is the default language. Polish translations are included.

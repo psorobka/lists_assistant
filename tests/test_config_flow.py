@@ -80,6 +80,21 @@ async def test_login_then_select_list(hass: HomeAssistant, native_shopping) -> N
     assert CONF_PASSWORD not in result["data"]
 
 
+async def test_shopping_list_is_selected_automatically(
+    hass, auth_client, native_shopping
+):
+    result = await login_flow(hass)
+    flow = hass.config_entries.flow._progress[result["flow_id"]]
+
+    result = await flow.async_step_lists({CONF_LISTS: [], CONF_BRIDGE: "123"})
+
+    assert result["step_id"] == "bridge"
+    result = await flow.async_step_bridge({"confirm": True})
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_LISTS] == ["123"]
+    assert result["data"][CONF_BRIDGE] == "123"
+
+
 @pytest.mark.asyncio
 async def test_invalid_password_shows_auth_error(hass: HomeAssistant) -> None:
     """Bad credentials leave the flow at its first step."""

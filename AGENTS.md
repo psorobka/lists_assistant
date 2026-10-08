@@ -45,6 +45,11 @@ Rozmawiaj po polsku; zachowuj angielskie nazwy, docstringi i styl istniejącego 
 
 ## Weryfikacja i zakończenie
 
+- Operacje na GitHubie, w tym tworzenie i obsługa PR, sprawdzanie CI, tagowanie
+  i publikowanie wydań, wykonuj przez `gh`.
+- Merge do `main` traktuj jako publikację wydania: przed merge'em przygotuj numer
+  wersji i `CHANGELOG.md`; po zielonym CI utwórz tag i GitHub Release. Nie kończ
+  zadania na samym merge'u.
 - Pod Windows wszystkie testy uruchamiaj w WSL, nie natywnie w PowerShell/CMD.
   Używaj linuksowego Pythona 3.13 i venv w WSL, nie windowsowego `.venv`.
   Na Linuxie uruchamiaj je bezpośrednio; wykorzystuj istniejące środowisko.
