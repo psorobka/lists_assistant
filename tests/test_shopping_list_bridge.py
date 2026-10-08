@@ -4,6 +4,7 @@ from copy import deepcopy
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.components.shopping_list import ShoppingData
 from homeassistant.const import EVENT_SHOPPING_LIST_UPDATED
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
@@ -176,6 +177,54 @@ async def test_full_bidirectional_crud_and_bulk(hass, native_shopping, api, clou
     assert bridge.status == "synchronized"
 
 
+async def test_large_remote_import_reuses_bounded_snapshots(
+    hass, native_shopping, api, cloud
+):
+    cloud["1"]["Items"] = [
+        {"Id": str(index), "Name": f"Item {index}", "Checked": 0} for index in range(60)
+    ]
+    entry = account(hass)
+
+    bridge = await setup(hass, entry)
+
+    assert len(await local_items(hass, native_shopping)) == 60
+    assert len(bridge.state["records"]) == 60
+    assert api.lists.await_count < 10
+
+
+async def test_batch_import_keeps_post_add_failure_uncertain(
+    hass, native_shopping, api, cloud
+):
+    cloud["1"]["Items"] = [
+        {"Id": str(index), "Name": f"Item {index}", "Checked": 0} for index in range(3)
+    ]
+    original_add = ShoppingData.async_add
+    add_calls = 0
+
+    async def add_then_lose_response(data, name, complete=False, context=None):
+        nonlocal add_calls
+        result = await original_add(data, name, complete, context)
+        add_calls += 1
+        if add_calls == 2:
+            raise ServiceValidationError("Injected lost response")
+        return result
+
+    entry = account(hass)
+    with patch.object(ShoppingData, "async_add", new=add_then_lose_response):
+        bridge = await setup(hass, entry)
+
+    assert bridge.status == "conflict"
+    assert len(await local_items(hass, native_shopping)) == 2
+    assert len(bridge.state["records"]) == 1
+    assert (
+        sum(
+            operation["state"] == "uncertain"
+            for operation in bridge.state["pending"].values()
+        )
+        == 1
+    )
+
+
 async def test_first_merge_preserves_all_duplicates_and_restart(
     hass, native_shopping, api, cloud
 ):
@@ -209,9 +258,9 @@ async def test_import_skips_unchanged_listonic_readback(
     bridge = await setup(hass, account(hass))
 
     assert bridge.status == "synchronized"
-    # One initial snapshot and one pre-write freshness check per imported item.
+    # One initial snapshot and one pre-write freshness check for this import batch.
     # Local todo writes do not need the extra unchanged Listonic readback.
-    assert api.lists.await_count == 4
+    assert api.lists.await_count == 2
 
 
 async def test_offline_queue_survives_unload_and_recovery(
@@ -713,22 +762,21 @@ async def test_cancelled_post_is_durable_and_not_replayed(
 async def test_local_concurrent_duplicate_is_not_guessed(
     hass, native_shopping, api, cloud
 ):
-    entry = account(hass)
-    bridge = await setup(hass, entry)
-    original = bridge._local
+    original_add = ShoppingData.async_add
     inserted = False
 
-    async def concurrent_user_addition():
+    async def add_concurrent_duplicate(data, name, complete=False, context=None):
         nonlocal inserted
-        items = await original()
-        if items and not inserted:
+        result = await original_add(data, name, complete, context)
+        if name == "Mleko" and not inserted:
             inserted = True
-            await todo(hass, native_shopping, "add_item", item="Mleko")
-            items = await original()
-        return items
+            await original_add(data, name, complete, context)
+        return result
 
+    entry = account(hass)
+    bridge = await setup(hass, entry)
     cloud["1"]["Items"].append({"Id": "222", "Name": "Mleko", "Checked": 0})
-    with patch.object(bridge, "_local", side_effect=concurrent_user_addition):
+    with patch.object(ShoppingData, "async_add", new=add_concurrent_duplicate):
         await settle(hass, bridge, refresh=True)
     assert bridge.status == "conflict"
     assert len(await local_items(hass, native_shopping)) == 2

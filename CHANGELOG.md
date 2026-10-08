@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Batch Shopping List imports to reduce repeated full-list reads during large syncs.
+
 ## 1.0.1
 
 - Allow the selected Listonic shopping-list target to be the only selected list

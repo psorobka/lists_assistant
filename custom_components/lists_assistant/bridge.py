@@ -19,6 +19,7 @@ from .const import CONF_BRIDGE_CONFIRMED, DOMAIN, settings
 from .reconcile import plan_changes, value
 
 _LOGGER = logging.getLogger(__name__)
+LOCAL_IMPORT_BATCH_SIZE = 25
 
 
 class StalePlan(Exception):
@@ -273,6 +274,29 @@ class ShoppingListBridge:
             self._schedule_retry(self._retry_at - monotonic())
             return
         key, operation = next(iter(self.state["pending"].items()))
+        if operation["direction"] == "local" and operation["action"] == "add":
+            try:
+                snapshot_valid = await self.coordinator.async_mutate(
+                    self._apply_local_import_batch,
+                    refresh=False,
+                )
+            except ApiError:
+                _LOGGER.warning("Shopping List import failed; scheduling a retry")
+                self._failures += 1
+                self._retry_at = monotonic() + min(300, 5 * 2 ** min(self._failures, 6))
+                self._schedule_retry(self._retry_at - monotonic())
+            else:
+                if not snapshot_valid:
+                    _LOGGER.debug(
+                        "Shopping List import snapshot became stale; recalculating"
+                    )
+                    await self.coordinator.async_refresh()
+                else:
+                    self._failures = 0
+                self._dirty = True
+            await self.store.save()
+            return
+
         operation["state"] = "in_flight"
         operation["before_ids"] = list(
             remote if operation["direction"] == "remote" else local
@@ -302,6 +326,88 @@ class ShoppingListBridge:
             self.state["pending"].pop(key)
             self._dirty = True
         await self.store.save()
+
+    async def _apply_local_import_batch(self):
+        """Import a bounded group from one verified snapshot via public todo actions."""
+        batch = []
+        for key, operation in self.state["pending"].items():
+            if (
+                operation["direction"] != "local"
+                or operation["action"] != "add"
+                or operation["state"] != "queued"
+            ):
+                break
+            batch.append((key, operation))
+            if len(batch) == LOCAL_IMPORT_BATCH_SIZE:
+                break
+
+        lists = await self.coordinator.client.lists()
+        if self.list_id not in lists:
+            raise ApiError("Bridge target is unavailable")
+        remote = {str(item["Id"]): value(item) for item in lists[self.list_id]["Items"]}
+        local = await self._local()
+        if any(
+            remote.get(operation["remote_id"]) != operation["source"]
+            for _, operation in batch
+        ):
+            return False
+
+        for key, operation in batch:
+            operation["state"] = "in_flight"
+            operation["before_ids"] = list(local)
+            await self.store.save()
+            try:
+                uid = await self._async_add_local_item(operation["payload"]["name"])
+            except (AmbiguousWrite, HomeAssistantError):
+                _LOGGER.error("Shopping List import result is uncertain")
+                operation["state"] = "uncertain"
+                self._set_status("conflict")
+                await self.store.save()
+                return True
+
+            self.state["records"][uid] = {
+                "remote_id": operation["remote_id"],
+                "base": {"name": operation["payload"]["name"], "checked": False},
+            }
+            self.state["pending"].pop(key)
+            local[uid] = {
+                "name": operation["payload"]["name"],
+                "checked": False,
+            }
+            await self.store.save()
+        return True
+
+    async def _async_add_local_item(self, name):
+        """Create through todo.add_item and read the new ID from HA's update event."""
+        added = []
+
+        @callback
+        def capture_added_item(event):
+            item = event.data.get("item")
+            if (
+                event.data.get("action") == "add"
+                and isinstance(item, dict)
+                and item.get("name") == name
+                and item.get("complete") is False
+                and item.get("id")
+            ):
+                added.append(str(item["id"]))
+
+        unsubscribe = self.hass.bus.async_listen(
+            EVENT_SHOPPING_LIST_UPDATED, capture_added_item
+        )
+        try:
+            await self.hass.services.async_call(
+                "todo",
+                "add_item",
+                {"entity_id": self.local_entity_id, "item": name},
+                blocking=True,
+            )
+        finally:
+            unsubscribe()
+        if len(added) != 1:
+            raise AmbiguousWrite("Local item identity is uncertain")
+        return added[0]
 
     async def _apply(self, operation):
         """Check both sides again, holding the coordinator's operation lock."""
