@@ -29,7 +29,7 @@ wymagania przeglądarki. Osobny job `e2e` w CI instaluje te zależności.
 Dwa przypadki: angielski desktop 1440×1000 w jasnym motywie oraz polski widok
 mobilny 390×844 w ciemnym motywie. Każdy przechodzi:
 
-1. Dodanie integracji przez UI, odrzucone hasło i poprawne logowanie.
+1. Dodanie integracji przez UI, wybór źródeł, odrzucone hasło i poprawne logowanie.
 2. Wybór listy, powiązanie Shopping List i potwierdzenie scalenia.
 3. Dodanie i odhaczenie produktu w natywnym panelu zakupów.
 4. Powrót zmiany nazwy i statusu z serwera Listonic do panelu HA.

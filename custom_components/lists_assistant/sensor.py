@@ -20,9 +20,12 @@ STATUSES = [
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    bridge = hass.data[DOMAIN][entry.entry_id].bridge
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    bridge = coordinator.bridge
     if bridge is not None:
         async_add_entities([BridgeStatusSensor(bridge)])
+    if coordinator.keep_bridge is not None:
+        async_add_entities([GoogleKeepStatusSensor(coordinator.keep_bridge)])
 
 
 class BridgeStatusSensor(SensorEntity):
@@ -55,6 +58,48 @@ class BridgeStatusSensor(SensorEntity):
                 for op in self.bridge.state["pending"].values()
             ),
             "shelved_item_count": len(self.bridge.held_local_ids()),
+        }
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self.bridge.signal, self.async_write_ha_state
+            )
+        )
+
+
+class GoogleKeepStatusSensor(SensorEntity):
+    """Expose Google Keep synchronization status without item data."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "google_keep_sync"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = False
+    _attr_options = [
+        "pending",
+        "synchronized",
+        "conflict",
+        "auth_failed",
+        "shopping_list_missing",
+        "storage_error",
+        "target_changed",
+    ]
+
+    def __init__(self, bridge):
+        self.bridge = bridge
+        self._attr_unique_id = f"{bridge.entry.unique_id}:google_keep_sync"
+
+    @property
+    def native_value(self):
+        return self.bridge.status
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "mapped_count": len(self.bridge.state["records"]),
+            "pending_count": len(self.bridge.state["pending"]),
+            "conflict_count": len(self.bridge.state["conflicts"]),
         }
 
     async def async_added_to_hass(self):

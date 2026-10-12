@@ -16,12 +16,69 @@ from custom_components.lists_assistant.const import (
     BRIDGE_OWNER,
     CONF_BRIDGE,
     CONF_BRIDGE_CONFIRMED,
+    CONF_KEEP_ENABLED,
+    CONF_KEEP_LIST_ID,
+    CONF_KEEP_TOKEN,
+    CONF_KEEP_USERNAME,
     CONF_LISTS,
     DOMAIN,
 )
 from custom_components.lists_assistant.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from custom_components.lists_assistant.keep_bridge import _validate_state
+
+
+class FakeGoogleKeepClient:
+    """In-memory Keep API for testing the shared Shopping List path."""
+
+    items = {}
+    next_id = 0
+    fail_auth = False
+    fail_add_after_create = False
+
+    def __init__(self, hass, username, token):
+        self.state = None
+
+    async def async_authenticate(self):
+        if type(self).fail_auth:
+            from custom_components.lists_assistant.keep_api import GoogleKeepError
+
+            raise GoogleKeepError("test authentication failure")
+        self.state = {"authenticated": True}
+        return self.state
+
+    async def async_refresh(self):
+        return self.state
+
+    async def async_items(self, list_id):
+        return deepcopy(self.items)
+
+    async def async_apply(self, list_id, action, item_id, payload):
+        if action == "add":
+            type(self).next_id += 1
+            item_id = f"keep-{type(self).next_id}"
+            self.items[item_id] = deepcopy(payload)
+            if type(self).fail_add_after_create:
+                from custom_components.lists_assistant.keep_api import GoogleKeepError
+
+                type(self).fail_add_after_create = False
+                raise GoogleKeepError("test lost response")
+            return item_id
+        if action == "update":
+            self.items[item_id] = deepcopy(payload)
+        else:
+            self.items.pop(item_id, None)
+        return None
+
+
+async def settle_keep(hass, list_bridge, keep_bridge):
+    """Wait for both bridge queues after a shared Shopping List event."""
+    for _ in range(3):
+        await hass.async_block_till_done()
+        if keep_bridge._task:
+            await keep_bridge._task
+        await list_bridge.async_wait_idle()
 
 
 @pytest.fixture
@@ -116,6 +173,26 @@ async def todo(hass, entity_id, service, **data):
 
 async def local_items(hass, entity_id):
     return (await todo(hass, entity_id, "get_items"))[entity_id]["items"]
+
+
+async def test_sync_listonic_service_refreshes_and_reconciles(
+    hass, native_shopping, api, cloud
+):
+    entry = account(hass)
+    await setup(hass, entry)
+    cloud["1"]["Items"].append({"Id": "777", "Name": "Service milk", "Checked": 0})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "sync_listonic",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+    )
+
+    assert [item["summary"] for item in await local_items(hass, native_shopping)] == [
+        "Service milk"
+    ]
+    assert api.lists.await_count >= 2
 
 
 async def settle(hass, bridge, refresh=False):
@@ -519,7 +596,9 @@ async def test_target_change_shelves_old_pending_ids(hass, native_shopping, api,
     assert not cloud["1"]["Items"]
 
 
-async def test_options_adds_shopping_list_to_selected_lists(hass, native_shopping, api):
+async def test_options_keeps_bridge_out_of_selected_todo_lists(
+    hass, native_shopping, api
+):
     entry = account(hass)
     await setup(hass, entry)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -537,7 +616,7 @@ async def test_options_adds_shopping_list_to_selected_lists(hass, native_shoppin
     )
 
     assert result["type"] == "create_entry"
-    assert result["data"][CONF_LISTS] == ["1", "3"]
+    assert result["data"][CONF_LISTS] == ["1"]
     assert result["data"][CONF_BRIDGE] == "3"
 
 
@@ -568,6 +647,13 @@ async def test_disconnect_keeps_items_and_queue(hass, native_shopping, api, clou
             },
             blocking=True,
             return_response=True,
+        )
+    with pytest.raises(ServiceValidationError, match="no Shopping List"):
+        await hass.services.async_call(
+            DOMAIN,
+            "sync_all",
+            {"config_entry_id": entry.entry_id},
+            blocking=True,
         )
 
 
@@ -862,3 +948,286 @@ async def test_create_readback_failure_does_not_queue_false_local_delete(
     await settle(hass, bridge, refresh=True)
     assert bridge.status == "synchronized"
     api.add_item.assert_awaited_once()
+
+
+async def test_google_keep_voice_items_share_ha_and_listonic(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+            **entry.data,
+        },
+    )
+
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        list_bridge = await setup(hass, entry)
+        keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await settle_keep(hass, list_bridge, keep_bridge)
+
+        assert keep_bridge.status == "synchronized"
+        FakeGoogleKeepClient.items["voice-item-1"] = {
+            "name": "Google voice milk",
+            "checked": False,
+        }
+        await hass.services.async_call(
+            DOMAIN,
+            "sync_gkeep",
+            {"config_entry_id": entry.entry_id},
+            blocking=True,
+        )
+
+        local = await local_items(hass, native_shopping)
+        assert [(item["summary"], item["status"]) for item in local] == [
+            ("Google voice milk", "needs_action")
+        ]
+        assert [item["Name"] for item in cloud["1"]["Items"]] == ["Google voice milk"]
+
+        FakeGoogleKeepClient.items["voice-item-1"]["checked"] = True
+        await hass.services.async_call(
+            DOMAIN,
+            "sync_all",
+            {"config_entry_id": entry.entry_id},
+            blocking=True,
+        )
+        local = await local_items(hass, native_shopping)
+        assert local[0]["status"] == "completed"
+        assert cloud["1"]["Items"][0]["Checked"] == 1
+        assert keep_bridge.status == "synchronized"
+
+
+async def test_keep_local_crud_reaches_keep_and_listonic(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        list_bridge = await setup(hass, entry)
+        keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await settle_keep(hass, list_bridge, keep_bridge)
+
+        await todo(hass, native_shopping, "add_item", item="Oat milk")
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert list(FakeGoogleKeepClient.items.values()) == [
+            {"name": "Oat milk", "checked": False}
+        ]
+        assert [item["Name"] for item in cloud["1"]["Items"]] == ["Oat milk"]
+
+        item = (await local_items(hass, native_shopping))[0]
+        await todo(
+            hass,
+            native_shopping,
+            "update_item",
+            item=item["uid"],
+            rename="Oat milk checked",
+            status="completed",
+        )
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert list(FakeGoogleKeepClient.items.values()) == [
+            {"name": "Oat milk checked", "checked": True}
+        ]
+        assert cloud["1"]["Items"][0]["Name"] == "Oat milk checked"
+        assert cloud["1"]["Items"][0]["Checked"] == 1
+
+        await todo(hass, native_shopping, "remove_item", item=item["uid"])
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert not FakeGoogleKeepClient.items
+        assert not cloud["1"]["Items"]
+
+
+async def test_keep_conflict_can_keep_google_keep_edit(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        list_bridge = await setup(hass, entry)
+        keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await settle_keep(hass, list_bridge, keep_bridge)
+        await todo(hass, native_shopping, "add_item", item="Shared item")
+        await settle_keep(hass, list_bridge, keep_bridge)
+        local_item = (await local_items(hass, native_shopping))[0]
+        keep_item_id = next(iter(FakeGoogleKeepClient.items))
+
+        async with keep_bridge._lock:
+            await todo(
+                hass,
+                native_shopping,
+                "update_item",
+                item=local_item["uid"],
+                rename="HA edit",
+            )
+            FakeGoogleKeepClient.items[keep_item_id] = {
+                "name": "Keep edit",
+                "checked": False,
+            }
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert keep_bridge.status == "conflict"
+
+        await keep_bridge.async_resolve_conflict(local_item["uid"], "google_keep")
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert (await local_items(hass, native_shopping))[0]["summary"] == "Keep edit"
+        assert cloud["1"]["Items"][0]["Name"] == "Keep edit"
+        assert keep_bridge.status == "synchronized"
+
+
+async def test_keep_uncertain_add_requires_explicit_resolution(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = True
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        list_bridge = await setup(hass, entry)
+        keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await settle_keep(hass, list_bridge, keep_bridge)
+        await todo(hass, native_shopping, "add_item", item="Uncertain item")
+        await settle_keep(hass, list_bridge, keep_bridge)
+
+        operation_id, operation = next(iter(keep_bridge.state["pending"].items()))
+        assert operation["state"] == "uncertain"
+        assert len(FakeGoogleKeepClient.items) == 1
+        assert [item["Name"] for item in cloud["1"]["Items"]] == ["Uncertain item"]
+
+        target_id = next(iter(FakeGoogleKeepClient.items))
+        await keep_bridge.async_resolve_write(operation_id, "applied", target_id)
+        await settle_keep(hass, list_bridge, keep_bridge)
+        assert not keep_bridge.state["pending"]
+        assert [item["Name"] for item in cloud["1"]["Items"]] == ["Uncertain item"]
+        assert keep_bridge.status == "synchronized"
+
+
+async def test_keep_auth_failure_is_visible_and_does_not_start_polling(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.fail_auth = True
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    try:
+        with patch(
+            "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+            FakeGoogleKeepClient,
+        ):
+            await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+            keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+            assert keep_bridge.status == "auth_failed"
+            assert keep_bridge._task is None
+            assert not cloud["1"]["Items"]
+    finally:
+        FakeGoogleKeepClient.fail_auth = False
+
+
+def test_keep_store_validation_accepts_delete_write_ahead_state():
+    state = {
+        "records": {
+            "ha-item": {
+                "remote_id": "keep-item",
+                "base": {"name": "Milk", "checked": False},
+            }
+        },
+        "pending": {
+            "remote:delete:ha-item": {
+                "direction": "remote",
+                "action": "delete",
+                "ha_id": "ha-item",
+                "remote_id": "keep-item",
+                "payload": None,
+                "before": {"name": "Milk", "checked": False},
+                "source": None,
+                "state": "in_flight",
+                "before_ids": ["keep-item"],
+            }
+        },
+        "conflicts": {},
+        "local_list_id": "shopping-list-entry",
+    }
+
+    assert _validate_state(state) is None
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        None,
+        {"records": [], "pending": {}, "conflicts": {}, "local_list_id": None},
+        {
+            "records": {"ha-item": {"remote_id": "", "base": {}}},
+            "pending": {},
+            "conflicts": {},
+            "local_list_id": None,
+        },
+    ],
+)
+def test_keep_store_validation_rejects_malformed_state(state):
+    with pytest.raises(BridgeStorageError):
+        _validate_state(state)

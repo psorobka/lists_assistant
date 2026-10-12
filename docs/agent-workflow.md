@@ -31,7 +31,7 @@ To zestawy startowe; przy zmianie kontraktu dodaj testy jego odbiorców.
 | Opcje, przepięcie/odłączenie Shopping List | `config_flow.py`, `bridge.py`, `bridge_store.py` | `test_shopping_list_bridge.py` |
 | Polling, blokady, encje todo, setup/unload | `coordinator.py`, `todo.py`, `__init__.py` | `test_lifecycle.py` |
 | Scalanie, wspólna baza, konflikt/usuwanie | `reconcile.py` | `test_reconcile.py`, potem `test_shopping_list_bridge.py` |
-| Kolejka, offline, niepewne zapisy, Assist | `bridge.py`, `bridge_store.py`, `coordinator.py` | `test_shopping_list_bridge.py`, `test_bridge_store.py` |
+| Kolejka, offline, niepewne zapisy, Assist i Google Keep | `bridge.py`, `keep_bridge.py`, `keep_api.py`, `bridge_store.py`, `coordinator.py` | `test_shopping_list_bridge.py`, `test_keep_api.py`, `test_bridge_store.py` |
 | Format i uszkodzenie Store | `bridge_store.py` | `test_bridge_store.py`, `test_shopping_list_bridge.py` |
 | Akcje CRUD list i produktów | `services.py`, `api.py`, `services.yaml` | `test_account_services.py`, `test_api.py`, `test_translations.py` |
 | Rozwiązywanie konfliktu/zapisu, sensor, diagnostyka | `bridge_services.py`, `sensor.py`, `diagnostics.py` | `test_shopping_list_bridge.py` |
@@ -53,7 +53,9 @@ Akcje konta korzystają ze świeżego snapshotu także dla list niewybranych jak
 | Błędy i niepewny zapis | [api/errors-and-sync.md](api/errors-and-sync.md) |
 | Zakres faktycznie sprawdzonego API | [api/live-validation.md](api/live-validation.md) |
 | Usługi i przykłady użytkownika | [actions.md](actions.md) |
+| Lokalne uruchomienie Home Assistant w Dockerze | [local-development.md](local-development.md) |
 | Shopping List, Assist, pierwsze scalenie | [shopping-list.md](shopping-list.md) |
+| Live Google Keep → HA → Listonic | [google-keep.md](google-keep.md) |
 | Przeglądarka i artefakty E2E | [e2e.md](e2e.md) |
 | Publikacja wersji i wymagania HACS | [releasing.md](releasing.md) |
 | Uzasadnienie architektury/plan rozszerzeń | [integration-plan.md](integration-plan.md) |

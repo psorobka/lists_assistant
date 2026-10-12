@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0
+
+- Add Google Keep checkbox-list synchronization through the shared Home Assistant
+  Shopping List, including durable mappings, offline writes and conflict handling.
+- Let users select Listonic, Google Keep or both during setup, then choose todo
+  lists and Shopping List synchronization targets independently.
+- Add actions to synchronize all connected providers or one provider on demand.
+- Make the polling interval configurable in minutes; it defaults to one minute.
+- Use readable, provider-prefixed todo entity IDs and improve integration naming.
+- Add setup guidance and acknowledgements for the projects and APIs this
+  integration builds on.
+
 ## 1.0.2
 
 - Batch Shopping List imports to reduce repeated full-list reads during large syncs.

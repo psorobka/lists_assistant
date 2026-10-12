@@ -1,19 +1,26 @@
 # Shopping List i Assist
 
-Integracja synchronizuje jedną wybraną listę Listonic z wbudowaną Shopping List
-Home Assistant. Pozostałe wybrane listy są dostępne jako encje `todo`.
+Integracja udostępnia wybrane listy Listonic i Google Keep jako encje `todo`.
+Z każdego źródła można niezależnie wybrać listę do synchronizacji z wbudowaną
+Shopping List Home Assistant.
 Powiązanie korzysta z publicznych akcji `todo` i zdarzeń HA oraz własnego pliku
 Store; nie modyfikuje core ani plików danych Shopping List.
 
 ## Włączenie
 
 1. Skonfiguruj w HA integrację **Shopping List** i sprawdź, że jej lista działa.
-2. Dodaj integrację **Lists Assistant**, zaloguj się i wybierz listy.
-3. Wskaż listę Listonic, którą chcesz powiązać z listą zakupów HA.
-4. Przeczytaj podsumowanie liczby pozycji i potwierdź pierwsze scalenie.
+2. Dodaj integrację **Lists Assistant** i wybierz Listonic, Google Keep albo oba.
+3. Zaloguj wybrane usługi, wskaż listy do encji `todo` i opcjonalne cele Shopping
+   List HA.
+4. Przeczytaj podsumowanie liczby pozycji i potwierdź każde wybrane scalenie.
 5. Sprawdź sensor **Synchronizacja listy zakupów**. Stan „Zsynchronizowano”
    oznacza, że aktualne snapshoty wybranej listy i Shopping List są zgodne.
 6. Powiedz do Assist **„Dodaj mleko do listy zakupów”**.
+
+Google Assistant może dodawać produkty do Keep, a wybrane listy Keep są widoczne
+w HA jako encje `todo`. Jeśli połączysz listy z obu usług z Shopping List HA,
+ta lista będzie wspólnym punktem synchronizacji. Szczegóły i ograniczenia logowania
+opisuje [instrukcja Google Keep](google-keep.md).
 
 Istniejące wpisy z obu stron zostają zachowane. Pierwsze scalenie traktuje je
 jako osobne produkty: jedna pozycja „mleko” w HA i jedna „mleko” w Listonic dadzą

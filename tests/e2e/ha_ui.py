@@ -24,7 +24,16 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 )
 
 from custom_components.lists_assistant.api import ListonicClient
-from custom_components.lists_assistant.const import DOMAIN
+from custom_components.lists_assistant.const import (
+    CONF_BRIDGE,
+    CONF_KEEP_ANDROID_ID,
+    CONF_KEEP_ENABLED,
+    CONF_KEEP_LIST_ID,
+    CONF_KEEP_OAUTH_TOKEN,
+    CONF_KEEP_USERNAME,
+    CONF_LISTS,
+    DOMAIN,
+)
 
 
 class FakeListonic:
@@ -81,6 +90,42 @@ class FakeListonic:
         return web.Response(status=204)
 
 
+class FakeGoogleKeepClient:
+    """In-memory Keep API used by the browser-to-Listonic end-to-end scenario."""
+
+    list_id = "e2e-keep-list"
+    items = {}
+    next_id = 0
+
+    def __init__(self, hass, username, token):
+        self.state = None
+
+    async def async_authenticate(self):
+        self.state = {"authenticated": True}
+        return self.state
+
+    async def async_lists(self):
+        return [{"id": self.list_id, "title": "E2E Google Keep"}]
+
+    async def async_refresh(self):
+        return self.state
+
+    async def async_items(self, list_id):
+        return deepcopy(self.items)
+
+    async def async_apply(self, list_id, action, item_id, payload):
+        if action == "add":
+            type(self).next_id += 1
+            item_id = f"keep-{type(self).next_id}"
+            self.items[item_id] = deepcopy(payload)
+            return item_id
+        if action == "update":
+            self.items[item_id] = deepcopy(payload)
+        else:
+            self.items.pop(item_id, None)
+        return None
+
+
 async def wait_for(check):
     """Await actual backend state; no fixed UI delays."""
     async with asyncio.timeout(30):
@@ -106,6 +151,8 @@ async def test_config_flow_and_shopping_ui(
     dark,
 ):
     fake = FakeListonic()
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
     app = web.Application()
     app.router.add_route("*", "/{path:.*}", fake.handle)
     fake_client = await aiohttp_client(app)
@@ -142,6 +189,19 @@ async def test_config_flow_and_shopping_ui(
         patch(
             "custom_components.lists_assistant.config_flow.ListonicClient",
             partial(ListonicClient, base_url=base_url),
+        ),
+        patch(
+            "custom_components.lists_assistant.config_flow.GoogleKeepClient",
+            FakeGoogleKeepClient,
+        ),
+        patch(
+            "custom_components.lists_assistant.config_flow.async_exchange_master_token",
+            new_callable=AsyncMock,
+            return_value="aas_et/e2e-fixture-only",
+        ),
+        patch(
+            "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+            FakeGoogleKeepClient,
         ),
     ):
         async with async_playwright() as playwright:
@@ -218,6 +278,11 @@ async def test_config_flow_and_shopping_ui(
                     .fill("Lists Assistant")
                 )
                 await page.get_by_text("Lists Assistant", exact=True).click()
+                await expect(page.locator("ha-selector-select").first).to_be_visible()
+                await page.screenshot(
+                    path=str(artifact / "source-selection.png"), full_page=True
+                )
+                await page.locator("ha-dialog").get_by_role("button").last.click()
                 await page.locator("ha-form-string input").first.fill(
                     "e2e@example.test"
                 )
@@ -345,6 +410,71 @@ async def test_config_flow_and_shopping_ui(
                 )
                 await page.screenshot(
                     path=str(artifact / "recovered.png"), full_page=True
+                )
+
+                # Configure the Keep options flow, then verify a voice-style Keep
+                # addition traverses the native list and reaches fake Listonic.
+                result = await hass.config_entries.options.async_init(entry.entry_id)
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"],
+                    {
+                        CONF_LISTS: ["1"],
+                        CONF_BRIDGE: "1",
+                        CONF_KEEP_ENABLED: True,
+                    },
+                )
+                assert result["step_id"] == "keep_auth"
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"],
+                    {
+                        CONF_KEEP_USERNAME: "e2e@example.test",
+                        CONF_KEEP_ANDROID_ID: "0123456789abcdef",
+                        CONF_KEEP_OAUTH_TOKEN: "e2e-oauth-cookie-fixture",
+                    },
+                )
+                assert result["step_id"] == "keep_list"
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"],
+                    {CONF_KEEP_LIST_ID: FakeGoogleKeepClient.list_id},
+                )
+                assert result["step_id"] == "keep_confirm"
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"], {"confirm": True}
+                )
+                assert result["step_id"] == "bridge"
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"], {"confirm": True}
+                )
+                assert result["type"] == "create_entry"
+                await hass.async_block_till_done()
+                await wait_for(lambda: entry.state is ConfigEntryState.LOADED)
+                coordinator = hass.data[DOMAIN][entry.entry_id]
+                keep_bridge = coordinator.keep_bridge
+                if keep_bridge._task:
+                    await keep_bridge._task
+                await coordinator.bridge.async_wait_idle()
+
+                FakeGoogleKeepClient.items["voice-item"] = {
+                    "name": "Keep voice item",
+                    "checked": False,
+                }
+                keep_bridge.request_sync()
+                await wait_for(
+                    lambda: any(
+                        item["Name"] == "Keep voice item"
+                        for item in fake.lists["1"]["Items"]
+                    )
+                )
+                if keep_bridge._task:
+                    await keep_bridge._task
+                await coordinator.bridge.async_wait_idle()
+                await page.goto(url + "/todo?entity_id=" + native_id)
+                await expect(
+                    page.get_by_text("Keep voice item", exact=True)
+                ).to_be_visible()
+                assert any(
+                    item["name"] == "Keep voice item"
+                    for item in FakeGoogleKeepClient.items.values()
                 )
             except Exception:
                 await page.screenshot(

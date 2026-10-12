@@ -2,6 +2,16 @@
   "config": {
     "step": {
       "user": {
+        "title": "Choose services",
+        "description": "Choose at least one service to synchronize with Home Assistant and set the polling interval. Changes to Home Assistant Shopping List are synchronized immediately.",
+        "data": {
+          "sources": "Services",
+          "scan_interval": "Synchronization interval (minutes)",
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "listonic_auth": {
         "title": "Connect to Listonic",
         "description": "Sign in with your Listonic account. Your password is used only to obtain API tokens and is not stored.",
         "data": {
@@ -31,15 +41,43 @@
         "data": {
           "confirm": "Merge both lists and enable synchronization"
         }
+      },
+      "keep_auth": {
+        "title": "Connect Google Keep",
+        "description": "Enter the test account email, Android ID, and oauth_token cookie from the setup guide. The cookie is exchanged immediately and only the master token is stored.",
+        "data": {
+          "google_keep_username": "Google account email",
+          "google_keep_android_id": "Android ID",
+          "google_keep_oauth_token": "Google oauth_token cookie"
+        }
+      },
+      "keep_list": {
+        "title": "Choose Google Keep lists",
+        "description": "Choose lists to expose as Home Assistant todo entities and, optionally, one list to synchronize with Home Assistant Shopping List.",
+        "data": {
+          "google_keep_list_ids": "Google Keep todo lists",
+          "google_keep_list_id": "Use as Home Assistant Shopping List"
+        }
+      },
+      "keep_confirm": {
+        "title": "Merge Google Keep and Home Assistant",
+        "description": "Home Assistant Shopping List: {local_count} items. Google Keep “{keep_list_name}”: {keep_count} items. The first merge preserves every item, including repeated names. Later changes synchronize both ways.",
+        "data": {
+          "confirm": "Merge both lists and enable synchronization"
+        }
       }
     },
     "error": {
       "invalid_auth": "The email or password was rejected.",
+      "select_source": "Select Listonic, Google Keep, or both.",
       "cannot_connect": "Could not connect to Listonic. Try again.",
       "select_list": "Select at least one Listonic list.",
+      "select_keep_list": "Select at least one Google Keep todo list or a Shopping List bridge.",
       "invalid_email": "Enter a valid email address.",
       "wrong_account": "Sign in to the account already configured for this integration.",
       "invalid_selection": "Choose available lists and select the Shopping List target from your selected lists.",
+      "keep_auth_failed": "Could not authenticate with Google Keep. Check the email, Android ID, and oauth_token cookie.",
+      "keep_requires_bridge": "Connect a Listonic list to Home Assistant Shopping List before enabling Google Keep synchronization.",
       "shopping_list_missing": "Configure and start the built-in Home Assistant Shopping List first.",
       "confirm_merge": "Confirm the described merge policy.",
       "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
@@ -48,6 +86,8 @@
     "abort": {
       "already_configured": "This Listonic account is already configured.",
       "no_lists": "Create a list in Listonic, then add the integration again.",
+      "keep_no_lists": "Create a checkbox list in Google Keep, then add the integration again.",
+      "keep_auth_failed": "Could not authenticate with Google Keep. Check the saved token or reconnect in options.",
       "reauth_successful": "Your Listonic session has been renewed.",
       "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
       "cannot_connect": "Could not connect to Listonic. Try again.",
@@ -74,6 +114,18 @@
           "storage_error": "Stored synchronization data error",
           "shelved": "Pending changes for a previous list"
         }
+      },
+      "google_keep_sync": {
+        "name": "Google Keep synchronization",
+        "state": {
+          "auth_failed": "Reconnect Google Keep",
+          "conflict": "Needs resolution",
+          "pending": "Waiting for synchronization",
+          "shopping_list_missing": "Configure HA Shopping List",
+          "storage_error": "Stored synchronization data error",
+          "synchronized": "Synchronized",
+          "target_changed": "Local Shopping List changed"
+        }
       }
     }
   },
@@ -81,6 +133,8 @@
     "abort": {
       "already_configured": "This Listonic account is already configured.",
       "no_lists": "Create a list in Listonic, then add the integration again.",
+      "keep_no_lists": "Create a checkbox list in Google Keep, then configure the integration again.",
+      "keep_auth_failed": "Could not authenticate with Google Keep. Reconnect the account in options.",
       "reauth_successful": "Your Listonic session has been renewed.",
       "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
       "cannot_connect": "Could not connect to Listonic. Try again.",
@@ -90,9 +144,12 @@
       "invalid_auth": "The email or password was rejected.",
       "cannot_connect": "Could not connect to Listonic. Try again.",
       "select_list": "Select at least one Listonic list.",
+      "select_keep_list": "Select at least one Google Keep todo list or a Shopping List bridge.",
       "invalid_email": "Enter a valid email address.",
       "wrong_account": "Sign in to the account already configured for this integration.",
       "invalid_selection": "Choose available lists and select the Shopping List target from your selected lists.",
+      "keep_auth_failed": "Could not authenticate with Google Keep. Check the email, Android ID, and oauth_token cookie.",
+      "keep_requires_bridge": "Connect a Listonic list to Home Assistant Shopping List before enabling Google Keep synchronization.",
       "shopping_list_missing": "Configure and start the built-in Home Assistant Shopping List first.",
       "confirm_merge": "Confirm the described merge policy.",
       "bridge_in_use": "Home Assistant Shopping List is already connected to another Listonic account.",
@@ -111,7 +168,48 @@
         "description": "Select the Listonic lists you want to add to Home Assistant.",
         "data": {
           "list_ids": "Listonic lists",
-          "shopping_list_id": "Use as Home Assistant Shopping List"
+          "shopping_list_id": "Use as Home Assistant Shopping List",
+          "google_keep_enabled": "Synchronize a Google Keep shopping list",
+          "scan_interval": "Synchronization interval (minutes)"
+        }
+      },
+      "keep_only": {
+        "title": "Choose Google Keep lists",
+        "description": "Choose lists to expose as Home Assistant todo entities and, optionally, one list to synchronize with Home Assistant Shopping List.",
+        "data": {
+          "google_keep_list_ids": "Google Keep todo lists",
+          "google_keep_list_id": "Use as Home Assistant Shopping List",
+          "scan_interval": "Synchronization interval (minutes)"
+        }
+      },
+      "keep_only_confirm": {
+        "title": "Merge Google Keep and Home Assistant",
+        "description": "Home Assistant Shopping List: {local_count} items. Google Keep “{keep_list_name}”: {keep_count} items. The first merge preserves every item, including repeated names. Later changes synchronize both ways.",
+        "data": {
+          "confirm": "Merge both lists and enable synchronization"
+        }
+      },
+      "keep_auth": {
+        "title": "Connect Google Keep",
+        "description": "Keep access uses an unofficial private protocol. Enter the test account email, Android ID, and oauth_token cookie from the setup guide. The cookie is exchanged immediately; Home Assistant stores a master token that can access all Keep notes on that account. A dedicated account is recommended.",
+        "data": {
+          "google_keep_username": "Google account email",
+          "google_keep_android_id": "Android ID",
+          "google_keep_oauth_token": "Google oauth_token cookie"
+        }
+      },
+      "keep_list": {
+        "title": "Choose the Google Keep list",
+        "description": "Only checkbox lists are available for synchronization.",
+        "data": {
+          "google_keep_list_id": "Google Keep list"
+        }
+      },
+      "keep_confirm": {
+        "title": "Merge Google Keep and Home Assistant",
+        "description": "Home Assistant Shopping List: {local_count} items. Google Keep: {keep_count} items. The first merge preserves every item, including repeated names. Later additions, edits, check-offs and deletions synchronize through Home Assistant to Listonic.",
+        "data": {
+          "confirm": "Merge both lists and enable synchronization"
         }
       }
     }
@@ -143,6 +241,47 @@
     }
   },
   "services": {
+    "sync_all": {
+      "name": "Synchronize all connected lists",
+      "description": "Run every configured Shopping List bridge for this account and wait for its current work to finish.",
+      "fields": {"config_entry_id": {"name": "Account"}}
+    },
+    "sync_listonic": {
+      "name": "Synchronize Listonic",
+      "description": "Refresh Listonic and reconcile its selected list with Home Assistant Shopping List.",
+      "fields": {"config_entry_id": {"name": "Account"}}
+    },
+    "sync_gkeep": {
+      "name": "Synchronize Google Keep",
+      "description": "Refresh Google Keep and reconcile its selected list with Home Assistant Shopping List.",
+      "fields": {"config_entry_id": {"name": "Account"}}
+    },
+    "get_sync_issues": {
+      "name": "Show synchronization issues",
+      "description": "Return pending writes and conflicts for the Listonic and Google Keep bridges.",
+      "fields": {
+        "config_entry_id": {"name": "Account"}
+      }
+    },
+    "resolve_keep_write": {
+      "name": "Resolve an uncertain Google Keep write",
+      "description": "Confirm the result after inspecting Home Assistant and Google Keep.",
+      "fields": {
+        "config_entry_id": {"name": "Account"},
+        "operation_id": {"name": "Operation ID"},
+        "outcome": {"name": "Verified result"},
+        "target_item_id": {"name": "New target item ID"}
+      }
+    },
+    "resolve_keep_conflict": {
+      "name": "Resolve a Google Keep synchronization conflict",
+      "description": "Choose which version to keep after an edit or deletion conflict.",
+      "fields": {
+        "config_entry_id": {"name": "Account"},
+        "conflict_id": {"name": "Conflict ID"},
+        "choose": {"name": "Keep this version"}
+      }
+    },
     "get_lists": {
       "name": "Read lists and products",
       "description": "Return all accessible active lists and products for this account, including their IDs and metadata.",
