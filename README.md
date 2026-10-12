@@ -10,8 +10,10 @@ English is the default language. Polish translations are included.
 ## Features
 
 - A separate `todo` entity for each selected Listonic list.
+- Selected Google Keep checklists exposed as Home Assistant `todo` entities.
 - Two-way synchronization between one Listonic list and the built-in Home
-  Assistant Shopping List, including standard Assist shopping commands.
+  Assistant Shopping List, including standard Assist shopping commands. A
+  selected Google Keep list can use the same Shopping List as a bridge.
 - Create, rename, and deactivate lists; manage products, including quantity,
   unit, description, and price.
 - Persistent offline queue, conflict detection, and recovery from uncertain writes.
@@ -33,6 +35,32 @@ not an official integration from the manufacturer; API changes may require updat
 
 You can add the repository to HACS manually. Inclusion in the default HACS
 catalog requires a separate submission and approval.
+
+## Google Keep
+
+Choose Google Keep during setup to expose selected Keep checklists as `todo`
+entities. You can also link one Keep checklist to the built-in Home Assistant
+Shopping List. See the [Google Keep setup and authentication guide](docs/google-keep.md)
+for the required Android ID, cookie, security notes, and synchronization behavior.
+
+## Acknowledgements
+
+This integration builds on community work and reverse-engineering shared by:
+
+- [Google Keep Sync for Home Assistant](https://github.com/watkins-matt/home-assistant-google-keep-sync)
+  and [gkeep-list-sync](https://github.com/fcastilloec/gkeep-list-sync) for
+  prior Home Assistant integrations and practical Keep synchronization patterns.
+- [gkeepapi](https://github.com/kiwiz/gkeepapi) and
+  [gpsoauth](https://github.com/simon-weber/gpsoauth) for the unofficial Keep
+  client and authentication flow used by this integration.
+- [ha-listonic by omelhus](https://github.com/omelhus/ha-listonic) and
+  [Listonic by Sanji78](https://github.com/Sanji78/listonic) for earlier
+  community integrations that informed the Listonic API research and design.
+
+Thank you to these maintainers and contributors for sharing their work. Lists
+Assistant is an independent project and is not affiliated with Google,
+Home Assistant, or Listonic. See the [Listonic API notes](docs/api/README.md)
+for the locally verified contract and its limits.
 
 ## Manual installation
 

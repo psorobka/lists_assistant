@@ -17,4 +17,12 @@ async def async_get_config_entry_diagnostics(hass, entry):
             "mapped_count": len(bridge.state["records"]),
             "shelved_item_count": len(bridge.held_local_ids()),
         }
+    if coordinator.keep_bridge:
+        bridge = coordinator.keep_bridge
+        result["google_keep_synchronization"] = {
+            "status": bridge.status,
+            "pending_count": len(bridge.state["pending"]),
+            "conflict_count": len(bridge.state["conflicts"]),
+            "mapped_count": len(bridge.state["records"]),
+        }
     return result

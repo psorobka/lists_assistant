@@ -2,6 +2,16 @@
   "config": {
     "step": {
       "user": {
+        "title": "Wybierz usługi",
+        "description": "Wybierz co najmniej jedną usługę do synchronizacji z Home Assistant i ustaw interwał odpytywania. Zmiany listy zakupów HA są synchronizowane od razu.",
+        "data": {
+          "sources": "Usługi",
+          "scan_interval": "Interwał synchronizacji (minuty)",
+          "email": "E-mail",
+          "password": "Hasło"
+        }
+      },
+      "listonic_auth": {
         "title": "Połącz z Listonic",
         "description": "Zaloguj się na konto Listonic. Hasło posłuży tylko do pobrania tokenów API i nie zostanie zapisane.",
         "data": {
@@ -31,15 +41,43 @@
         "data": {
           "confirm": "Scal obie listy i włącz synchronizację"
         }
+      },
+      "keep_auth": {
+        "title": "Połącz z Google Keep",
+        "description": "Podaj e-mail konta testowego, Android ID i cookie oauth_token zgodnie z instrukcją. Cookie zostanie od razu wymienione; zapisany będzie tylko master token.",
+        "data": {
+          "google_keep_username": "E-mail konta Google",
+          "google_keep_android_id": "Android ID",
+          "google_keep_oauth_token": "Cookie Google oauth_token"
+        }
+      },
+      "keep_list": {
+        "title": "Wybierz listy Google Keep",
+        "description": "Wybierz listy jako encje todo Home Assistant i opcjonalnie jedną listę do synchronizacji z Shopping List Home Assistant.",
+        "data": {
+          "google_keep_list_ids": "Listy todo Google Keep",
+          "google_keep_list_id": "Użyj jako Shopping List Home Assistant"
+        }
+      },
+      "keep_confirm": {
+        "title": "Scal Google Keep i Home Assistant",
+        "description": "Shopping List Home Assistant: {local_count} pozycji. Google Keep „{keep_list_name}”: {keep_count} pozycji. Pierwsze scalenie zachowa wszystkie pozycje, także powtarzające się nazwy. Kolejne zmiany będą synchronizowane w obie strony.",
+        "data": {
+          "confirm": "Scal obie listy i włącz synchronizację"
+        }
       }
     },
     "error": {
       "invalid_auth": "Listonic odrzucił e-mail lub hasło.",
+      "select_source": "Wybierz Listonic, Google Keep albo oba źródła.",
       "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
       "select_list": "Wybierz co najmniej jedną listę Listonic.",
+      "select_keep_list": "Wybierz co najmniej jedną listę todo Google Keep lub most do Shopping List.",
       "invalid_email": "Podaj poprawny adres e-mail.",
       "wrong_account": "Zaloguj się na konto już skonfigurowane w tej integracji.",
       "invalid_selection": "Wybierz dostępne listy i wskaż cel listy zakupów spośród wybranych list.",
+      "keep_auth_failed": "Nie udało się zalogować do Google Keep. Sprawdź e-mail, Android ID i cookie oauth_token.",
+      "keep_requires_bridge": "Najpierw połącz listę Listonic z Shopping List Home Assistant.",
       "shopping_list_missing": "Najpierw skonfiguruj i uruchom wbudowaną listę zakupów Home Assistant.",
       "confirm_merge": "Potwierdź opisany sposób scalenia list.",
       "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
@@ -48,6 +86,8 @@
     "abort": {
       "already_configured": "To konto Listonic jest już skonfigurowane.",
       "no_lists": "Utwórz listę w Listonic, a następnie ponownie dodaj integrację.",
+      "keep_no_lists": "Utwórz listę wyboru w Google Keep, a następnie ponownie dodaj integrację.",
+      "keep_auth_failed": "Nie udało się zalogować do Google Keep. Sprawdź zapisany token lub połącz konto ponownie w opcjach.",
       "reauth_successful": "Sesja Listonic została odnowiona.",
       "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
       "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
@@ -74,6 +114,18 @@
           "storage_error": "Błąd zapisanych danych",
           "shelved": "Oczekujące zmiany poprzedniej listy"
         }
+      },
+      "google_keep_sync": {
+        "name": "Synchronizacja Google Keep",
+        "state": {
+          "auth_failed": "Połącz ponownie z Google Keep",
+          "conflict": "Wymaga rozstrzygnięcia",
+          "pending": "Oczekuje na synchronizację",
+          "shopping_list_missing": "Skonfiguruj listę zakupów HA",
+          "storage_error": "Błąd zapisanych danych",
+          "synchronized": "Zsynchronizowano",
+          "target_changed": "Zmieniono listę zakupów HA"
+        }
       }
     }
   },
@@ -81,6 +133,8 @@
     "abort": {
       "already_configured": "To konto Listonic jest już skonfigurowane.",
       "no_lists": "Utwórz listę w Listonic, a następnie ponownie dodaj integrację.",
+      "keep_no_lists": "Utwórz listę wyboru w Google Keep, a następnie ponownie skonfiguruj integrację.",
+      "keep_auth_failed": "Nie udało się zalogować do Google Keep. Połącz konto ponownie w opcjach.",
       "reauth_successful": "Sesja Listonic została odnowiona.",
       "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
       "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
@@ -90,9 +144,12 @@
       "invalid_auth": "Listonic odrzucił e-mail lub hasło.",
       "cannot_connect": "Nie można połączyć się z Listonic. Spróbuj ponownie.",
       "select_list": "Wybierz co najmniej jedną listę Listonic.",
+      "select_keep_list": "Wybierz co najmniej jedną listę todo Google Keep lub most do Shopping List.",
       "invalid_email": "Podaj poprawny adres e-mail.",
       "wrong_account": "Zaloguj się na konto już skonfigurowane w tej integracji.",
       "invalid_selection": "Wybierz dostępne listy i wskaż cel listy zakupów spośród wybranych list.",
+      "keep_auth_failed": "Nie udało się zalogować do Google Keep. Sprawdź e-mail, Android ID i cookie oauth_token.",
+      "keep_requires_bridge": "Najpierw połącz listę Listonic z Shopping List Home Assistant.",
       "shopping_list_missing": "Najpierw skonfiguruj i uruchom wbudowaną listę zakupów Home Assistant.",
       "confirm_merge": "Potwierdź opisany sposób scalenia list.",
       "bridge_in_use": "Lista zakupów Home Assistant jest już połączona z innym kontem Listonic.",
@@ -111,7 +168,48 @@
         "description": "Wybierz listy Listonic, które chcesz dodać do Home Assistant.",
         "data": {
           "list_ids": "Listy Listonic",
-          "shopping_list_id": "Użyj jako listy zakupów Home Assistant"
+          "shopping_list_id": "Użyj jako listy zakupów Home Assistant",
+          "google_keep_enabled": "Synchronizuj listę zakupów Google Keep",
+          "scan_interval": "Interwał synchronizacji (minuty)"
+        }
+      },
+      "keep_only": {
+        "title": "Wybierz listy Google Keep",
+        "description": "Wybierz listy jako encje todo Home Assistant i opcjonalnie jedną listę do synchronizacji z Shopping List Home Assistant.",
+        "data": {
+          "google_keep_list_ids": "Listy todo Google Keep",
+          "google_keep_list_id": "Użyj jako Shopping List Home Assistant",
+          "scan_interval": "Interwał synchronizacji (minuty)"
+        }
+      },
+      "keep_only_confirm": {
+        "title": "Scal Google Keep i Home Assistant",
+        "description": "Shopping List Home Assistant: {local_count} pozycji. Google Keep „{keep_list_name}”: {keep_count} pozycji. Pierwsze scalenie zachowa wszystkie pozycje, także powtarzające się nazwy. Kolejne zmiany będą synchronizowane w obie strony.",
+        "data": {
+          "confirm": "Scal obie listy i włącz synchronizację"
+        }
+      },
+      "keep_auth": {
+        "title": "Połącz Google Keep",
+        "description": "Dostęp do Keep korzysta z nieoficjalnego, prywatnego protokołu. Podaj e-mail konta testowego, Android ID i cookie oauth_token zgodnie z instrukcją. Cookie zostanie od razu wymienione; Home Assistant zapisze master token z dostępem do wszystkich notatek tego konta. Zalecamy osobne konto.",
+        "data": {
+          "google_keep_username": "Adres e-mail konta Google",
+          "google_keep_android_id": "Android ID",
+          "google_keep_oauth_token": "Cookie oauth_token Google"
+        }
+      },
+      "keep_list": {
+        "title": "Wybierz listę Google Keep",
+        "description": "Można synchronizować tylko listy z polami wyboru.",
+        "data": {
+          "google_keep_list_id": "Lista Google Keep"
+        }
+      },
+      "keep_confirm": {
+        "title": "Scal Google Keep z Home Assistant",
+        "description": "Shopping List HA: {local_count} pozycji. Google Keep: {keep_count} pozycji. Pierwsze scalenie zachowa wszystkie wpisy, również te o takich samych nazwach. Kolejne dodania, edycje, odhaczanie i usuwanie będą synchronizowane przez Home Assistant do Listonic.",
+        "data": {
+          "confirm": "Scal obie listy i włącz synchronizację"
         }
       }
     }
@@ -143,6 +241,45 @@
     }
   },
   "services": {
+    "sync_all": {
+      "name": "Synchronizuj wszystkie listy",
+      "description": "Uruchom wszystkie skonfigurowane mosty Shopping List dla tego wpisu i poczekaj na zakończenie bieżącej synchronizacji.",
+      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+    },
+    "sync_listonic": {
+      "name": "Synchronizuj Listonic",
+      "description": "Odśwież Listonic i uzgodnij wybraną listę z Shopping List Home Assistant. Zmiany mogą przejść dalej do połączonego Google Keep.",
+      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+    },
+    "sync_gkeep": {
+      "name": "Synchronizuj Google Keep",
+      "description": "Odśwież Google Keep i uzgodnij wybraną listę z Shopping List Home Assistant. Zmiany mogą przejść dalej do połączonego Listonic.",
+      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+    },
+    "get_sync_issues": {
+      "name": "Pokaż problemy synchronizacji",
+      "description": "Zwraca oczekujące zapisy i konflikty bridge’y Listonic oraz Google Keep.",
+      "fields": {"config_entry_id": {"name": "Konto"}}
+    },
+    "resolve_keep_write": {
+      "name": "Rozstrzygnij niepewny zapis Google Keep",
+      "description": "Potwierdź wynik po sprawdzeniu Shopping List Home Assistant i Google Keep.",
+      "fields": {
+        "config_entry_id": {"name": "Konto"},
+        "operation_id": {"name": "ID operacji"},
+        "outcome": {"name": "Potwierdzony wynik"},
+        "target_item_id": {"name": "ID nowego produktu w celu"}
+      }
+    },
+    "resolve_keep_conflict": {
+      "name": "Rozstrzygnij konflikt synchronizacji Google Keep",
+      "description": "Wybierz wersję do zachowania po konflikcie edycji lub usunięcia.",
+      "fields": {
+        "config_entry_id": {"name": "Konto"},
+        "conflict_id": {"name": "ID konfliktu"},
+        "choose": {"name": "Zachowaj tę wersję"}
+      }
+    },
     "get_lists": {
       "name": "Odczytaj listy i produkty",
       "description": "Zwraca wszystkie dostępne aktywne listy i produkty konta, w tym identyfikatory i metadane.",

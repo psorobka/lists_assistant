@@ -1,3 +1,30 @@
+sync_all:
+  name: Synchronize all connected lists
+  description: Run every configured Shopping List bridge for this account and wait for its current work to finish.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+sync_listonic:
+  name: Synchronize Listonic
+  description: Refresh Listonic and reconcile its selected list with Home Assistant Shopping List.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+sync_gkeep:
+  name: Synchronize Google Keep
+  description: Refresh Google Keep and reconcile its selected list with Home Assistant Shopping List.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
 get_sync_issues:
   name: Show synchronization issues
   description: Return conflicts, pending writes and changes retained for previous
@@ -54,6 +81,51 @@ resolve_sync_write:
     target_item_id:
       selector:
         text: null
+resolve_keep_write:
+  name: Resolve an uncertain Google Keep write
+  description: Confirm the result after inspecting Home Assistant and Google Keep.
+    For a completed addition, select the new target item ID. Choose not_applied only
+    after verifying that the item was not created.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+    operation_id:
+      required: true
+      selector:
+        text: null
+    outcome:
+      required: true
+      selector:
+        select:
+          options:
+          - applied
+          - not_applied
+    target_item_id:
+      selector:
+        text: null
+resolve_keep_conflict:
+  name: Resolve a Google Keep synchronization conflict
+  description: Choose which version to keep after an edit or deletion conflict.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: lists_assistant
+    conflict_id:
+      required: true
+      selector:
+        text: null
+    choose:
+      required: true
+      selector:
+        select:
+          options:
+          - home_assistant
+          - google_keep
 get_lists:
   name: Read lists and products
   description: Return all accessible active lists and products for this account, including

@@ -99,9 +99,11 @@ class ShoppingListBridge:
             self.request_sync()
 
     @callback
-    def request_sync(self):
+    def request_sync(self, *, force=False):
         if self._stopped or self._storage_failed:
             return
+        if force:
+            self._retry_at = 0
         self._dirty = True
         if self._task is None:
             self._task = self.entry.async_create_background_task(

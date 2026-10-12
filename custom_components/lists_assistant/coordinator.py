@@ -14,23 +14,35 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ApiError, AuthError, ListonicClient
-from .const import CONF_LISTS, DEFAULT_INTERVAL, DOMAIN, settings
+from .const import (
+    CONF_BRIDGE,
+    CONF_INTERVAL,
+    CONF_LISTS,
+    DEFAULT_INTERVAL,
+    DOMAIN,
+    settings,
+)
 
 
 class ListonicCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Keep selected remote lists fresh for their todo entities."""
 
-    def __init__(self, hass: HomeAssistant, client: ListonicClient, entry: ConfigEntry):
+    def __init__(
+        self, hass: HomeAssistant, client: ListonicClient | None, entry: ConfigEntry
+    ):
         self.client = client
         self.entry = entry
         self.bridge = None
+        self.keep_bridge = None
         self._operation_lock = asyncio.Lock()
         super().__init__(
             hass,
             logger=logging.getLogger(__name__),
             name=DOMAIN,
             config_entry=entry,
-            update_interval=timedelta(seconds=DEFAULT_INTERVAL),
+            update_interval=timedelta(
+                minutes=settings(entry).get(CONF_INTERVAL, DEFAULT_INTERVAL)
+            ),
         )
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
@@ -41,6 +53,8 @@ class ListonicCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     async def _fetch(self) -> dict[str, dict[str, Any]]:
         """Read a full snapshot with the account's operation lock held."""
+        if self.client is None:
+            return {}
         try:
             lists = await self.client.lists()
         except AuthError as err:
@@ -51,7 +65,11 @@ class ListonicCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         except ApiError as err:
             self.logger.warning("Could not refresh Listonic lists: %s", err)
             raise UpdateFailed("Unable to retrieve Listonic lists") from err
-        selected = settings(self.entry).get(CONF_LISTS, list(lists))
+        entry_settings = settings(self.entry)
+        selected = set(entry_settings.get(CONF_LISTS, list(lists)))
+        bridge_id = entry_settings.get(CONF_BRIDGE, "none")
+        if bridge_id != "none":
+            selected.add(bridge_id)
         result = {key: value for key, value in lists.items() if key in selected}
         self.logger.debug("Loaded %s selected Listonic lists", len(result))
         return result

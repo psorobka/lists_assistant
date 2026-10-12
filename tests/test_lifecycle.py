@@ -3,7 +3,8 @@
 import asyncio
 from copy import deepcopy
 from datetime import timedelta
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -12,14 +13,25 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lists_assistant.api import AmbiguousWrite, ApiError, AuthError
-from custom_components.lists_assistant.const import CONF_LISTS, DOMAIN
+from custom_components.lists_assistant.const import (
+    CONF_BRIDGE,
+    CONF_BRIDGE_CONFIRMED,
+    CONF_KEEP_LISTS,
+    CONF_KEEP_TOKEN,
+    CONF_KEEP_USERNAME,
+    CONF_LISTS,
+    CONF_SOURCES,
+    DOMAIN,
+    SOURCE_KEEP,
+)
+from custom_components.lists_assistant.todo import GoogleKeepTodoList
 
 
 @pytest.fixture
 def entry(hass):
     account = MockConfigEntry(
         domain=DOMAIN,
-        title="Listonic test",
+        title="Listonic (lstauto-test-account)",
         unique_id="demo@example.test",
         data={"tokens": {"access_token": "fake"}, CONF_LISTS: ["1"]},
     )
@@ -80,8 +92,16 @@ def api(remote):
 
 
 async def setup(hass, entry):
+    er.async_get(hass).async_get_or_create(
+        "todo",
+        DOMAIN,
+        "demo@example.test:1",
+        suggested_object_id="Zakupy",
+        original_name="Zakupy",
+    )
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    assert entry.title == "Lists Assistant (Listonic)"
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id("todo", DOMAIN, "demo@example.test:1")
     assert entity_id is not None
@@ -90,11 +110,10 @@ async def setup(hass, entry):
 
 async def test_services_atomic_update_and_metadata(hass, entry, api, remote):
     entity_id, coordinator = await setup(hass, entry)
-    assert coordinator.update_interval == timedelta(seconds=30)
+    assert coordinator.update_interval == timedelta(minutes=1)
     assert set(coordinator.data) == {"1"}
     assert hass.states.get(entity_id).state == "1"
     assert hass.states.get(entity_id).attributes["list_id"] == "1"
-
     await hass.services.async_call(
         "todo",
         "update_item",
@@ -115,7 +134,6 @@ async def test_services_atomic_update_and_metadata(hass, entry, api, remote):
         "Notatka",
     )
     assert hass.states.get(entity_id).state == "0"
-
     await hass.services.async_call(
         "todo",
         "update_item",
@@ -154,8 +172,134 @@ async def test_services_atomic_update_and_metadata(hass, entry, api, remote):
     assert hass.states.get(entity_id).state == "0"
 
 
+async def test_bridge_only_list_is_fetched_without_todo_entity(
+    hass, entry, api, native_shopping
+):
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_LISTS: [],
+            CONF_BRIDGE: "1",
+            CONF_BRIDGE_CONFIRMED: "1",
+        },
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert set(coordinator.data) == {"1"}
+    assert (
+        er.async_get(hass).async_get_entity_id("todo", DOMAIN, "demo@example.test:1")
+        is None
+    )
+
+
+async def test_keep_only_exposes_selected_todo_lists(hass, tmp_path):
+    """A Keep-only entry creates writable todo entities without Listonic tokens."""
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Google Keep test",
+        unique_id="keep:keep@example.test",
+        data={
+            CONF_SOURCES: [SOURCE_KEEP],
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fixture-master-token",
+            CONF_KEEP_LISTS: ["keep-list-id"],
+        },
+    )
+    entry.add_to_hass(hass)
+    unique_id = "keep:keep@example.test:keep:keep-list-id"
+    er.async_get(hass).async_get_or_create(
+        "todo", DOMAIN, unique_id, suggested_object_id="keep-list-id"
+    )
+    keep_client = MagicMock()
+    keep_client.state = None
+    keep_client.async_authenticate = AsyncMock(return_value={"session": "fixture"})
+    keep_client.async_refresh = AsyncMock(return_value={"session": "fixture"})
+    keep_client.async_lists = AsyncMock(
+        return_value=[{"id": "keep-list-id", "title": "Keep groceries"}]
+    )
+    keep_client.async_items = AsyncMock(
+        return_value={"item-id": {"name": "Milk", "checked": False}}
+    )
+    keep_client.async_apply = AsyncMock(return_value="new-item-id")
+    with patch(
+        "custom_components.lists_assistant.keep_api.GoogleKeepClient",
+        return_value=keep_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.client is None
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("todo", DOMAIN, unique_id)
+    assert entity_id is not None
+    assert entity_id == "todo.lists_assistant_gkeep_keep_groceries"
+    state = hass.states.get(entity_id)
+    assert state.attributes["list_id"] == "keep-list-id"
+    assert state.attributes["provider"] == "google_keep"
+    assert hass.services.has_service(DOMAIN, "get_lists") is False
+    await hass.services.async_call(
+        "todo",
+        "add_item",
+        {"entity_id": entity_id, "item": "Tea"},
+        blocking=True,
+    )
+    keep_client.async_apply.assert_awaited_once_with(
+        "keep-list-id", "add", None, {"name": "Tea", "checked": False}
+    )
+    keep_client.async_apply.reset_mock()
+    await hass.services.async_call(
+        "todo",
+        "update_item",
+        {
+            "entity_id": entity_id,
+            "item": "item-id",
+            "rename": "Whole milk",
+            "status": "completed",
+        },
+        blocking=True,
+    )
+    keep_client.async_apply.assert_awaited_once_with(
+        "keep-list-id",
+        "update",
+        "item-id",
+        {"name": "Whole milk", "checked": True},
+    )
+    keep_client.async_apply.reset_mock()
+    await hass.services.async_call(
+        "todo",
+        "remove_item",
+        {"entity_id": entity_id, "item": ["item-id"]},
+        blocking=True,
+    )
+    keep_client.async_apply.assert_awaited_once_with(
+        "keep-list-id", "delete", "item-id", None
+    )
+    entity = GoogleKeepTodoList(coordinator, keep_client, "keep-list-id")
+    keep_client.state = None
+    await entity.async_update()
+    keep_client.async_authenticate.assert_awaited()
+    with pytest.raises(HomeAssistantError, match="update Google Keep"):
+        await entity.async_update_todo_item(
+            SimpleNamespace(uid="missing", summary="Name", status=None)
+        )
+    keep_client.async_apply.side_effect = RuntimeError("offline")
+    with pytest.raises(HomeAssistantError, match="add Google Keep"):
+        await entity.async_create_todo_item(
+            SimpleNamespace(summary="New item", status=None)
+        )
+    with pytest.raises(HomeAssistantError, match="delete Google Keep"):
+        await entity.async_delete_todo_items(["item-id"])
+
+
 async def test_availability_rename_and_recovery_keep_entity(hass, entry, api, remote):
     entity_id, coordinator = await setup(hass, entry)
+    assert entity_id == "todo.lists_assistant_listonic_zakupy"
     before = deepcopy(coordinator.data)
     api.lists.side_effect = ApiError("offline")
     await coordinator.async_refresh()

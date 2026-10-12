@@ -1,8 +1,8 @@
-# Akcje Listonic w Home Assistant
+# Akcje Lists Assistant w Home Assistant
 
 Akcje są dostępne w Narzędziach deweloperskich → Akcje oraz w skryptach
 i automatyzacjach. Formularze mają opisy PL/EN. Każde wywołanie wymaga
-`config_entry_id`, czyli wybranego konta integracji Listonic. Selektor konta
+`config_entry_id`, czyli wybranego wpisu Lists Assistant. Selektor wpisu
 w formularzu pomaga wybrać właściwy wpis przy wielu kontach.
 
 `list_id` i `item_id` to numeryczne identyfikatory Listonic, zapisane jako tekst
@@ -14,6 +14,9 @@ integracja nie dopasowuje ich automatycznie. `list_id` jest też atrybutem encji
 
 | Akcja | Pola poza kontem | Odpowiedź |
 | --- | --- | --- |
+| `lists_assistant.sync_all` | brak | uruchamia skonfigurowane mosty i czeka na bieżące zadania |
+| `lists_assistant.sync_listonic` | brak | odświeża Listonic i uzgadnia jego listę z Shopping List HA |
+| `lists_assistant.sync_gkeep` | brak | odświeża Google Keep i uzgadnia jego listę z Shopping List HA |
 | `lists_assistant.get_lists` | brak | `lists`: dostępne aktywne listy, produkty i ich metadane |
 | `lists_assistant.create_list` | `name` | opcjonalnie `list_id` nowej listy |
 | `lists_assistant.rename_list` | `list_id`, `name` | brak |
@@ -21,6 +24,14 @@ integracja nie dopasowuje ich automatycznie. `list_id` jest też atrybutem encji
 | `lists_assistant.add_item` | `list_id`, `name`, opcjonalne metadane | opcjonalnie `item_id` nowego produktu |
 | `lists_assistant.update_item` | `list_id`, `item_id`, przynajmniej jedno zmieniane pole | brak |
 | `lists_assistant.delete_item` | `list_id`, `item_id` | brak |
+| `lists_assistant.get_sync_issues` | brak | oczekujące zapisy i konflikty bridge’ów |
+| `lists_assistant.resolve_keep_conflict` | `conflict_id`, `choose` | brak |
+| `lists_assistant.resolve_keep_write` | `operation_id`, `outcome`, opcjonalnie `target_item_id` | brak |
+
+Akcje synchronizacji wymagają powiązania danego źródła z wbudowaną Shopping List
+HA. Przy wspólnej liście zmiana zapisana przez jeden most może zostać przekazana
+przez drugi most do kolejnego źródła. Wywołanie czeka na bieżący cykl; stan i
+konflikty nadal sprawdzisz przez sensory oraz `lists_assistant.get_sync_issues`.
 
 Metadane produktu: `amount`, `unit`, `description`, `price`. Edycja dodatkowo
 obsługuje `name` i `checked` (`true`/`false`). Ilość przyjmuje kropkę lub przecinek
@@ -84,6 +95,12 @@ się. Niepewny zapis, np. utrata odpowiedzi POST, zgłasza błąd z instrukcją
 sprawdzenia `get_lists` przed ponowieniem. Akcje nie kolejkowują ani nie ponawiają
 zapisów automatycznie. Kolejka i akcje rozstrzygania z
 [instrukcji Shopping List](shopping-list.md) dotyczą wyłącznie bridge.
+
+`resolve_keep_write` dotyczy operacji Keep↔Shopping List HA. Po `get_sync_issues`
+sprawdź odpowiednią listę przed wyborem wyniku. Dla `outcome: applied` przy dodaniu
+podaj ID nowego produktu w celu; `not_applied` wybierz wyłącznie po sprawdzeniu,
+że pozycja nie została utworzona. Konflikty rozstrzyga się jawnie przez
+`resolve_keep_conflict`, wybierając `home_assistant` albo `google_keep`.
 
 Nie dodawaj automatycznego retry tworzenia listy/produktu po niepewnym wyniku.
 Odpowiedź `get_lists` zawiera nazwy i metadane zakupów — uwzględnij to przy
