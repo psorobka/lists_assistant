@@ -255,7 +255,6 @@
     },
     "sync_conflicts": {
       "title": "Shopping List conflicts: {count} ({source})",
-      "description": "Choose the versions to keep and review the preview before confirming. Other products continue synchronizing.",
       "fix_flow": {
         "step": {
           "choose": {

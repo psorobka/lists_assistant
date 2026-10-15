@@ -255,7 +255,6 @@
     },
     "sync_conflicts": {
       "title": "Konflikty listy zakupów: {count} ({source})",
-      "description": "Wybierz wersje do zachowania i sprawdź podgląd przed zatwierdzeniem. Pozostałe produkty nadal się synchronizują.",
       "fix_flow": {
         "step": {
           "choose": {
