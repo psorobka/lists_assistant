@@ -65,6 +65,13 @@
         "data": {
           "confirm": "Scal obie listy i włącz synchronizację"
         }
+      },
+      "conflict_policy": {
+        "title": "Konflikty synchronizacji",
+        "description": "Wybierz wersję zachowywaną przy sprzecznych zmianach. Zwykłe zmiany nadal synchronizują się w obie strony. Preferencja obejmuje usunięcia. Przy rozstrzyganiu ręcznym konfliktowe produkty czekają w Naprawach, a pozostałe synchronizują się dalej. Niedostępne źródło lub brak mapowania ID wstrzymuje decyzję. Niepewne zapisy wymagają osobnego sprawdzenia.",
+        "data": {
+          "conflict_policy": "Przy konflikcie zachowuj wersję z"
+        }
       }
     },
     "error": {
@@ -102,7 +109,7 @@
     },
     "sensor": {
       "shopping_list_sync": {
-        "name": "Synchronizacja listy zakupów",
+        "name": "Synchronizacja Listonic",
         "state": {
           "conflict": "Wymaga rozstrzygnięcia",
           "confirmation_required": "Potwierdź scalenie list",
@@ -211,6 +218,13 @@
         "data": {
           "confirm": "Scal obie listy i włącz synchronizację"
         }
+      },
+      "conflict_policy": {
+        "title": "Konflikty synchronizacji",
+        "description": "Wybierz wersję zachowywaną przy sprzecznych zmianach. Zwykłe zmiany nadal synchronizują się w obie strony. Preferencja obejmuje usunięcia. Przy rozstrzyganiu ręcznym konfliktowe produkty czekają w Naprawach, a pozostałe synchronizują się dalej. Niedostępne źródło lub brak mapowania ID wstrzymuje decyzję. Niepewne zapisy wymagają osobnego sprawdzenia.",
+        "data": {
+          "conflict_policy": "Przy konflikcie zachowuj wersję z"
+        }
       }
     }
   },
@@ -238,46 +252,107 @@
     "list_unavailable": {
       "title": "Lista Listonic niedostępna",
       "description": "Otwórz opcje integracji i sprawdź powiązanie list. Konflikty i niepewne zapisy odczytasz akcją lists_assistant.get_sync_issues, a rozstrzygniesz akcjami lists_assistant.resolve_sync_conflict i lists_assistant.resolve_sync_write. Przy błędzie storage zachowaj plik danych i sprawdź logi przed odzyskaniem kopii zapasowej."
+    },
+    "sync_conflicts": {
+      "title": "Konflikty listy zakupów: {count} ({source})",
+      "description": "Wybierz wersje do zachowania i sprawdź podgląd przed zatwierdzeniem. Pozostałe produkty nadal się synchronizują.",
+      "fix_flow": {
+        "step": {
+          "choose": {
+            "title": "Rozstrzygnij konflikty zbiorczo",
+            "description": "Wybierz źródło wersji do zachowania. Usunięcie po wybranej stronie zostanie przeniesione na drugą listę.",
+            "data": {
+              "choose": "Zachowaj wersje z"
+            }
+          },
+          "confirm": {
+            "title": "Zatwierdź decyzje ({count})",
+            "description": "{preview}\n\n∅ oznacza usunięcie, [x] kupiony, [ ] do kupienia. Zatwierdzenie zapisuje decyzje w kolejce. Synchronizacja może czekać na połączenie.",
+            "data": {
+              "confirm": "Zastosuj pokazane zmiany"
+            }
+          }
+        },
+        "error": {
+          "unavailable": "Nie można pobrać bezpiecznego podglądu. Sprawdź połączenie, mapowania i niepewne zapisy.",
+          "changed": "Lista zmieniła się. Sprawdź nowy podgląd i zatwierdź ponownie.",
+          "confirm_required": "Potwierdź pokazane zmiany."
+        },
+        "abort": {
+          "unavailable": "Most synchronizacji jest niedostępny.",
+          "storage_error": "Nie udało się zapisać decyzji. Synchronizacja została zatrzymana."
+        }
+      }
     }
   },
   "services": {
     "sync_all": {
       "name": "Synchronizuj wszystkie listy",
       "description": "Uruchom wszystkie skonfigurowane mosty Shopping List dla tego wpisu i poczekaj na zakończenie bieżącej synchronizacji.",
-      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Wpis integracji"
+        }
+      }
     },
     "sync_listonic": {
       "name": "Synchronizuj Listonic",
       "description": "Odśwież Listonic i uzgodnij wybraną listę z Shopping List Home Assistant. Zmiany mogą przejść dalej do połączonego Google Keep.",
-      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Wpis integracji"
+        }
+      }
     },
     "sync_gkeep": {
       "name": "Synchronizuj Google Keep",
       "description": "Odśwież Google Keep i uzgodnij wybraną listę z Shopping List Home Assistant. Zmiany mogą przejść dalej do połączonego Listonic.",
-      "fields": {"config_entry_id": {"name": "Wpis integracji"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Wpis integracji"
+        }
+      }
     },
     "get_sync_issues": {
       "name": "Pokaż problemy synchronizacji",
       "description": "Zwraca oczekujące zapisy i konflikty bridge’y Listonic oraz Google Keep.",
-      "fields": {"config_entry_id": {"name": "Konto"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        }
+      }
     },
     "resolve_keep_write": {
       "name": "Rozstrzygnij niepewny zapis Google Keep",
       "description": "Potwierdź wynik po sprawdzeniu Shopping List Home Assistant i Google Keep.",
       "fields": {
-        "config_entry_id": {"name": "Konto"},
-        "operation_id": {"name": "ID operacji"},
-        "outcome": {"name": "Potwierdzony wynik"},
-        "target_item_id": {"name": "ID nowego produktu w celu"}
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "operation_id": {
+          "name": "ID operacji"
+        },
+        "outcome": {
+          "name": "Potwierdzony wynik"
+        },
+        "target_item_id": {
+          "name": "ID nowego produktu w celu"
+        }
       }
     },
     "resolve_keep_conflict": {
       "name": "Rozstrzygnij konflikt synchronizacji Google Keep",
       "description": "Wybierz wersję do zachowania po konflikcie edycji lub usunięcia.",
       "fields": {
-        "config_entry_id": {"name": "Konto"},
-        "conflict_id": {"name": "ID konfliktu"},
-        "choose": {"name": "Zachowaj tę wersję"}
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "conflict_id": {
+          "name": "ID konfliktu"
+        },
+        "choose": {
+          "name": "Zachowaj tę wersję"
+        }
       }
     },
     "get_lists": {
@@ -408,6 +483,14 @@
     "shopping_list": {
       "options": {
         "none": "Nie łącz"
+      }
+    },
+    "conflict_policy": {
+      "options": {
+        "manual": "Rozstrzygaj ręcznie (konflikty w lodówce)",
+        "home_assistant": "Home Assistant",
+        "listonic": "Listonic",
+        "google_keep": "Google Keep"
       }
     }
   }

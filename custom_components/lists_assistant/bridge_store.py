@@ -33,6 +33,9 @@ def validate(data):
                 isinstance(state[k], dict) for k in ("records", "pending", "conflicts")
             ):
                 raise ValueError
+            from .conflicts import validate_resolutions
+
+            validate_resolutions(state)
             remote_ids = set()
             for ha_id, record in state["records"].items():
                 if not isinstance(ha_id, str) or not ha_id or not _item(record["base"]):

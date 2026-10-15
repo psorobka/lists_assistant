@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.2.0
+
+- Add a final setup and options step to choose Home Assistant, Listonic, Google
+  Keep or manual conflict resolution. Ordinary changes still synchronize both
+  ways; automatic preferences also cover conflicting deletions.
+- Keep unresolved products on hold across both Shopping List bridges while
+  continuing to synchronize unrelated products.
+- Add native Home Assistant Repairs for grouped conflict resolution, with a
+  preview, explicit confirmation and another review if the lists change.
+- Persist conflict decisions across reloads, verify the preferred source before
+  writing, and defer decisions when its connection or stable ID mapping is
+  unavailable. Uncertain writes still require separate verification.
+- Preserve both providers' product identities and Listonic metadata when a
+  conflict decision recreates a deleted Home Assistant item, and wake the other
+  bridge as soon as a held product is released.
+- Match unique, normalized names when initially merging independent sources and
+  before importing unmatched products. Repeated names remain distinct, and
+  already mapped products are excluded from import matching.
+- Give synchronization sensors provider-specific entity IDs and labels. Migrate
+  default generated IDs when the destination is free, preserving custom IDs.
+- Expand Google Keep synchronization logging with lifecycle, queue, snapshot and
+  retry details without logging product names or credentials.
+- Extend English and Polish UI text, user documentation, backend regressions and
+  Chromium coverage of the configuration and Repairs flows.
+
+### Upgrade notes
+
+- Existing configurations default to manual resolution. Select a preferred source
+  in the final options step to enable automatic resolution.
+- Generated sensor IDs can change to
+  `sensor.lists_assistant_listonic_synchronization` and
+  `sensor.lists_assistant_google_keep_synchronization`. Check dashboards and
+  automations referencing the previous generated IDs; custom IDs are retained.
+- Keep existing synchronization storage files. No mapping reset is required.
+
 ## 1.1.0
 
 - Add Google Keep checkbox-list synchronization through the shared Home Assistant

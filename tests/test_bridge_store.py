@@ -26,6 +26,28 @@ VALID = {
 
 
 @pytest.mark.parametrize(
+    "decisions",
+    [
+        [],
+        {"h1": []},
+        {"missing": {"value": BASE, "source": "manual"}},
+        {"h1": {"source": "manual"}},
+        {"h1": {"value": [], "source": "manual"}},
+        {"h1": {"value": BASE, "source": "unknown"}},
+    ],
+)
+def test_corrupt_saved_decisions_fail_closed(decisions):
+    from custom_components.lists_assistant.keep_bridge import _validate_state
+
+    data = deepcopy(VALID)
+    data["bindings"]["1"]["resolutions"] = decisions
+    with pytest.raises(BridgeStorageError):
+        validate(data)
+    with pytest.raises(BridgeStorageError):
+        _validate_state(data["bindings"]["1"])
+
+
+@pytest.mark.parametrize(
     "corruption",
     [
         "root",

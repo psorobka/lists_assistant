@@ -33,6 +33,13 @@ HA. Przy wspólnej liście zmiana zapisana przez jeden most może zostać przeka
 przez drugi most do kolejnego źródła. Wywołanie czeka na bieżący cykl; stan i
 konflikty nadal sprawdzisz przez sensory oraz `lists_assistant.get_sync_issues`.
 
+Konflikty można też rozstrzygać zbiorczo bez akcji/YAML w **Ustawienia → System →
+Naprawy**, z podglądem skutków przed zatwierdzeniem. Ostatni krok konfiguracji
+i Opcji określa preferowane źródło (HA/Listonic/Google Keep) lub tryb ręczny.
+Ręczne konflikty zatrzymują tylko wskazane produkty, również w drugim moście;
+pozostałe produkty nadal się synchronizują. Preferencja nie rozstrzyga niepewnych
+wyników zapisów. Szczegóły: [Shopping List](shopping-list.md#rozstrzyganie-konfliktów).
+
 Metadane produktu: `amount`, `unit`, `description`, `price`. Edycja dodatkowo
 obsługuje `name` i `checked` (`true`/`false`). Ilość przyjmuje kropkę lub przecinek
 dziesiętny; jest przesyłana jako tekst bez obliczeń na liczbach zmiennoprzecinkowych.

@@ -329,6 +329,11 @@ async def test_config_flow_and_shopping_ui(
                     path=str(artifact / "confirmation.png"), full_page=True
                 )
                 await submit.click()
+                await expect(page.locator("ha-selector-select")).to_be_visible()
+                await page.screenshot(
+                    path=str(artifact / "conflict-policy.png"), full_page=True
+                )
+                await submit.click()
                 await wait_for(lambda: bool(hass.config_entries.async_entries(DOMAIN)))
                 entry = hass.config_entries.async_entries(DOMAIN)[0]
                 await hass.async_block_till_done()
@@ -412,6 +417,54 @@ async def test_config_flow_and_shopping_ui(
                     path=str(artifact / "recovered.png"), full_page=True
                 )
 
+                # Review and resolve a real edit conflict through native Repairs.
+                uid = next(iter(bridge.state["records"]))
+                remote_id = bridge.state["records"][uid]["remote_id"]
+                fake.offline = True
+                await bridge.coordinator.async_refresh()
+                await hass.services.async_call(
+                    "todo",
+                    "update_item",
+                    {"entity_id": native_id, "item": uid, "rename": "HA conflict"},
+                    blocking=True,
+                )
+                await bridge.async_wait_idle()
+                next(
+                    item for item in fake.lists["1"]["Items"] if item["Id"] == remote_id
+                )["Name"] = "Phone conflict"
+                fake.offline = False
+                await bridge.coordinator.async_refresh()
+                await bridge.async_wait_idle()
+                assert len(bridge.state["conflicts"]) == 1
+                await page.goto(url + "/config/repairs")
+                issue_title = (
+                    "Konflikty listy zakupów: 1 (Listonic)"
+                    if language == "pl"
+                    else "Shopping List conflicts: 1 (Listonic)"
+                )
+                await page.get_by_text(issue_title, exact=True).click()
+                await expect(
+                    page.locator("ha-dialog ha-selector-select")
+                ).to_be_visible()
+                await (
+                    page.locator("ha-dialog ha-selector-select")
+                    .get_by_role("combobox")
+                    .click()
+                )
+                await page.get_by_role("option", name="Listonic", exact=True).click()
+                await page.locator("ha-dialog").get_by_role("button").last.click()
+                await expect(
+                    page.get_by_text("Phone conflict", exact=False)
+                ).to_be_visible()
+                await page.screenshot(
+                    path=str(artifact / "repair-preview.png"), full_page=True
+                )
+                await page.locator("ha-dialog ha-checkbox").click()
+                await page.locator("ha-dialog").get_by_role("button").last.click()
+                await bridge.async_wait_idle()
+                await wait_for(lambda: bridge.status == "synchronized")
+                assert (await bridge._local())[uid]["name"] == "Phone conflict"
+
                 # Configure the Keep options flow, then verify a voice-style Keep
                 # addition traverses the native list and reaches fake Listonic.
                 result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -444,6 +497,10 @@ async def test_config_flow_and_shopping_ui(
                 assert result["step_id"] == "bridge"
                 result = await hass.config_entries.options.async_configure(
                     result["flow_id"], {"confirm": True}
+                )
+                assert result["step_id"] == "conflict_policy"
+                result = await hass.config_entries.options.async_configure(
+                    result["flow_id"], {"conflict_policy": "manual"}
                 )
                 assert result["type"] == "create_entry"
                 await hass.async_block_till_done()
