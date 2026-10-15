@@ -61,6 +61,59 @@ async def login_flow(hass):
     )
 
 
+@pytest.mark.parametrize("choice", ["manual", "home_assistant", "listonic"])
+async def test_final_policy_step_saves_connected_source(
+    hass, auth_client, native_shopping, choice
+):
+    result = await login_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_LISTS: ["123"], CONF_BRIDGE: "123"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"confirm": True}
+    )
+    assert result["step_id"] == "conflict_policy"
+    select = next(iter(result["data_schema"].schema.values()))
+    assert select.config["options"] == ["manual", "home_assistant", "listonic"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"conflict_policy": choice}
+    )
+    assert result["type"] == "create_entry"
+    assert result["data"]["conflict_policy"] == choice
+
+
+async def test_options_retains_policy_and_rejects_disconnected_source(
+    hass, auth_client, native_shopping
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="demo@example.test",
+        data={
+            "tokens": {"refresh_token": "refresh"},
+            CONF_LISTS: ["123"],
+            CONF_BRIDGE: "123",
+            "conflict_policy": "listonic",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_LISTS: ["123"], CONF_BRIDGE: "123"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"confirm": True}
+    )
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+    assert (await flow.async_step_conflict_policy())["step_id"] == "conflict_policy"
+    assert (await flow.async_step_conflict_policy({"conflict_policy": "google_keep"}))[
+        "step_id"
+    ] == "conflict_policy"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"conflict_policy": "home_assistant"}
+    )
+    assert result["data"]["conflict_policy"] == "home_assistant"
+
+
 @pytest.mark.asyncio
 async def test_login_then_select_list(hass: HomeAssistant, native_shopping) -> None:
     """Authenticate, select lists, and retain tokens but never the password."""
@@ -98,6 +151,10 @@ async def test_login_then_select_list(hass: HomeAssistant, native_shopping) -> N
             result["flow_id"], {"confirm": True}
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["title"] == "Lists Assistant (Listonic)"
     assert result["data"][CONF_LISTS] == ["123"]
@@ -116,6 +173,8 @@ async def test_shopping_list_bridge_does_not_expose_todo_entity_automatically(
 
     assert result["step_id"] == "bridge"
     result = await flow.async_step_bridge({"confirm": True})
+    assert result["step_id"] == "conflict_policy"
+    result = await flow.async_step_conflict_policy({"conflict_policy": "manual"})
     assert result["type"] == "create_entry"
     assert result["data"][CONF_LISTS] == []
     assert result["data"][CONF_BRIDGE] == "123"
@@ -214,6 +273,10 @@ async def test_keep_only_selects_todo_lists_without_listonic_login(hass):
             {CONF_KEEP_LISTS: ["keep-a", "keep-b"], CONF_KEEP_LIST_ID: "none"},
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["title"] == "Lists Assistant (Google Keep)"
     assert result["data"][CONF_SOURCES] == [SOURCE_KEEP]
@@ -280,6 +343,10 @@ async def test_both_sources_choose_keep_todo_and_shopping_bridge_separately(
             result["flow_id"], {"confirm": True}
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["title"] == "Lists Assistant (Listonic + Google Keep)"
     assert result["data"][CONF_SOURCES] == [SOURCE_LISTONIC, SOURCE_KEEP]
@@ -320,6 +387,10 @@ async def test_keep_only_options_edit_selected_todo_lists(hass):
             {CONF_KEEP_LISTS: ["keep-a", "keep-b"], CONF_KEEP_LIST_ID: "none"},
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_KEEP_LISTS] == ["keep-a", "keep-b"]
     assert result["data"][CONF_KEEP_LIST_ID] == "none"
@@ -365,6 +436,10 @@ async def test_keep_only_options_confirm_new_shopping_bridge(hass, native_shoppi
             result["flow_id"], {"confirm": True}
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_KEEP_LIST_ID] == "keep-b"
 
@@ -544,6 +619,10 @@ async def test_unbound_account_finishes_without_merge(hass, auth_client):
             CONF_BRIDGE: "none",
         },
     )
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
 
 
@@ -642,6 +721,10 @@ async def test_keep_options_auth_list_and_both_merge_confirmations(
             result["flow_id"], {"confirm": True}
         )
 
+    assert result["step_id"] == "conflict_policy"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"conflict_policy": "manual"}
+    )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_KEEP_ENABLED] is True
     assert result["data"][CONF_KEEP_USERNAME] == "demo@gmail.test"

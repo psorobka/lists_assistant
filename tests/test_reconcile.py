@@ -15,6 +15,23 @@ def test_initial_merge_keeps_duplicate_records():
     assert not plan["conflicts"]
 
 
+def test_initial_merge_maps_same_product_across_sources():
+    plan = plan_changes(
+        {},
+        {"ha-1": {"name": "Oat milk", "checked": False}},
+        {"remote-1": {"name": "Oat milk", "checked": False}},
+    )
+
+    assert plan["records"] == {
+        "ha-1": {
+            "remote_id": "remote-1",
+            "base": {"name": "Oat milk", "checked": False},
+        }
+    }
+    assert not plan["pending"]
+    assert not plan["conflicts"]
+
+
 @pytest.mark.parametrize(
     "local,remote,actions",
     [

@@ -15,8 +15,18 @@ from homeassistant.helpers.event import async_call_later
 
 from .api import AmbiguousWrite, ApiError, identifier
 from .bridge_store import BridgeStorageError, BridgeStore
+from .conflicts import (
+    apply_policy,
+    commit,
+    freeze_peer,
+    preview,
+    remap_local,
+    save_plan,
+    update_issue,
+    verify_authority,
+)
 from .const import CONF_BRIDGE_CONFIRMED, DOMAIN, settings
-from .reconcile import plan_changes, value
+from .reconcile import product_key, value
 
 _LOGGER = logging.getLogger(__name__)
 LOCAL_IMPORT_BATCH_SIZE = 25
@@ -38,6 +48,8 @@ def shopping_list_entity(hass):
 
 class ShoppingListBridge:
     """Durable mappings, three-way merge and conservative ambiguous-write recovery."""
+
+    source = "listonic"
 
     def __init__(self, hass, entry, coordinator, list_id):
         self.hass, self.entry, self.coordinator = hass, entry, coordinator
@@ -142,11 +154,12 @@ class ShoppingListBridge:
 
     @callback
     def _set_status(self, status):
+        update_issue(self, status)
         if status != self.status:
             _LOGGER.debug("Shopping List bridge status changed: %s", status)
         self.status = status
         issue_id = f"shopping_list_{self.entry.entry_id}"
-        if status in (
+        if (status != "conflict" or not self.state["conflicts"]) and status in (
             "conflict",
             "storage_error",
             "confirmation_required",
@@ -252,26 +265,29 @@ class ShoppingListBridge:
             ):
                 continue  # An explicit-ID update/delete has been confirmed by readback.
             uncertain[key] = operation
-        planned = plan_changes(self.state["records"], local, remote)
-        self.state.update(planned)
-        self.state["pending"].update(uncertain)
-        await self.store.save()
-        if uncertain or self.state["conflicts"]:
-            _LOGGER.warning(
-                "Shopping List bridge has %s conflicts and %s uncertain writes",
-                len(self.state["conflicts"]),
-                len(uncertain),
-            )
+        if uncertain:
+            # An uncertain create must not establish identity through name matching.
             self._set_status("conflict")
             return
+
+        async def prepare():
+            planned = await apply_policy(self, local, remote)
+            planned = await freeze_peer(self, planned)
+            await save_plan(self, planned)
+
+        await self.coordinator.async_mutate(prepare, refresh=False)
         if not self.coordinator.last_update_success:
             self._set_status("pending")
             return
         if not self.state["pending"]:
             self._failures = 0
-            self._set_status("shelved" if self.held_local_ids() else "synchronized")
+            self._set_status(
+                "conflict"
+                if self.state["conflicts"]
+                else ("shelved" if self.held_local_ids() else "synchronized")
+            )
             return
-        self._set_status("pending")
+        self._set_status("conflict" if self.state["conflicts"] else "pending")
         if monotonic() < self._retry_at:
             self._schedule_retry(self._retry_at - monotonic())
             return
@@ -355,6 +371,29 @@ class ShoppingListBridge:
             return False
 
         for key, operation in batch:
+            if not await verify_authority(self, operation):
+                return False
+            matches = [
+                uid
+                for uid, item in local.items()
+                if uid not in self.state["records"]
+                if product_key(item["name"])
+                == product_key(operation["payload"]["name"])
+            ]
+            if len(matches) == 1:
+                uid = matches[0]
+                _LOGGER.info(
+                    "Shopping List sync matched an existing Shopping List item "
+                    "to a Listonic product by name; skipped add"
+                )
+                await remap_local(self, uid, operation["remote_id"])
+                self.state["records"][uid] = {
+                    "remote_id": operation["remote_id"],
+                    "base": local[uid],
+                }
+                self.state["pending"].pop(key)
+                await self.store.save()
+                continue
             operation["state"] = "in_flight"
             operation["before_ids"] = list(local)
             await self.store.save()
@@ -367,6 +406,7 @@ class ShoppingListBridge:
                 await self.store.save()
                 return True
 
+            await remap_local(self, uid, operation["remote_id"])
             self.state["records"][uid] = {
                 "remote_id": operation["remote_id"],
                 "base": {"name": operation["payload"]["name"], "checked": False},
@@ -430,9 +470,28 @@ class ShoppingListBridge:
             raise StalePlan
         operation["before_ids"] = list(target)
         await self.store.save()
+        if not await verify_authority(self, operation):
+            raise StalePlan
         action, payload = operation["action"], operation["payload"]
         if to_remote:
             if action == "add":
+                matches = [
+                    item_id
+                    for item_id, item in remote.items()
+                    if item_id
+                    not in {r["remote_id"] for r in self.state["records"].values()}
+                    if product_key(item["name"]) == product_key(payload["name"])
+                ]
+                if len(matches) == 1:
+                    _LOGGER.info(
+                        "Shopping List sync matched an existing Listonic product "
+                        "by name; skipped add"
+                    )
+                    self.state["records"][source_id] = {
+                        "remote_id": matches[0],
+                        "base": source[source_id],
+                    }
+                    return
                 created = await self.coordinator.client.add_item(
                     self.list_id, payload["name"]
                 )
@@ -473,6 +532,7 @@ class ShoppingListBridge:
                 ]
                 if len(candidates) != 1:
                     raise AmbiguousWrite("Local item identity is uncertain")
+                await remap_local(self, candidates[0], source_id)
                 self.state["records"][candidates[0]] = {
                     "remote_id": source_id,
                     "base": {"name": payload["name"], "checked": False},
@@ -497,38 +557,16 @@ class ShoppingListBridge:
                     blocking=True,
                 )
 
+    async def _save(self):
+        await self.store.save()
+
     async def async_resolve_conflict(self, ha_id, choose):
-        """Explicitly choose a side for the current edit/delete conflict."""
-        async with self._lock:
-            if ha_id not in self.state["conflicts"]:
-                raise ServiceValidationError("Synchronization conflict not found")
-            await self.coordinator.async_refresh()
-            if (
-                not self.coordinator.last_update_success
-                or self.list_id not in self.coordinator.data
-            ):
-                raise ServiceValidationError("Listonic target is unavailable")
-            local, remote = await self._local(), self._remote()
-            record = self.state["records"][ha_id]
-            chosen = (
-                local.get(ha_id)
-                if choose == "home_assistant"
-                else remote.get(record["remote_id"])
-            )
-            other = (
-                remote.get(record["remote_id"])
-                if choose == "home_assistant"
-                else local.get(ha_id)
-            )
-            if chosen is not None and other is None:
-                del self.state["records"][
-                    ha_id
-                ]  # Explicitly recreate the chosen surviving item.
-            elif other is not None:
-                record["base"] = other
-            self.state["conflicts"].pop(ha_id)
-            await self.store.save()
-        self.request_sync()
+        """Persist a single explicit decision through the same path as Repairs."""
+        expected = await preview(self, choose)
+        if ha_id not in expected["conflicts"]:
+            raise ServiceValidationError("Synchronization conflict not found")
+        if await commit(self, choose, expected, ids=[ha_id]) is not None:
+            raise ServiceValidationError("Conflict changed; inspect it again")
 
     async def async_resolve_write(self, operation_id, outcome, target_id=None):
         """User verifies an uncertain write; never guess identity from names."""
@@ -567,12 +605,34 @@ class ShoppingListBridge:
                         if operation["direction"] == "remote"
                         else operation["remote_id"]
                     )
-                    if ha_id in self.state["records"] or any(
-                        r["remote_id"] == remote_id
-                        for r in self.state["records"].values()
+                    decisions = self.state.get("resolutions", {})
+                    existing = self.state["records"].get(ha_id)
+                    recreating_remote = (
+                        operation["direction"] == "remote"
+                        and ha_id in decisions
+                        and existing is not None
+                        and existing["remote_id"] not in target
+                    )
+                    mapped = [
+                        uid
+                        for uid, record in self.state["records"].items()
+                        if record["remote_id"] == remote_id
+                    ]
+                    recreating_local = (
+                        operation["direction"] == "local"
+                        and len(mapped) == 1
+                        and mapped[0] in decisions
+                        and mapped[0] not in target
+                    )
+                    if (existing is not None and not recreating_remote) or (
+                        mapped and not recreating_local
                     ):
                         raise ServiceValidationError(
                             "The target item is already mapped"
+                        )
+                    if recreating_local:
+                        await self.coordinator.async_mutate(
+                            lambda: remap_local(self, ha_id, remote_id), refresh=False
                         )
                     self.state["records"][ha_id] = {
                         "remote_id": remote_id,

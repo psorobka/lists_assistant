@@ -2,7 +2,9 @@
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import slugify
 
 from .const import DOMAIN
 
@@ -22,17 +24,46 @@ STATUSES = [
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     bridge = coordinator.bridge
+    entities = []
     if bridge is not None:
-        async_add_entities([BridgeStatusSensor(bridge)])
+        entities.append(BridgeStatusSensor(bridge))
     if coordinator.keep_bridge is not None:
-        async_add_entities([GoogleKeepStatusSensor(coordinator.keep_bridge)])
+        entities.append(GoogleKeepStatusSensor(coordinator.keep_bridge))
+    registry = er.async_get(hass)
+    for entity in entities:
+        old_entity_id = registry.async_get_entity_id("sensor", DOMAIN, entity.unique_id)
+        old_registry_entry = (
+            registry.async_get(old_entity_id) if old_entity_id else None
+        )
+        if isinstance(entity, BridgeStatusSensor):
+            generated_id = "sensor.shopping_list_synchronization"
+        elif (
+            old_registry_entry is not None
+            and old_registry_entry.original_name is not None
+        ):
+            generated_id = f"sensor.{slugify(old_registry_entry.original_name)}"
+        else:
+            generated_id = None
+        suggested_id = (
+            "sensor.lists_assistant_listonic_synchronization"
+            if isinstance(entity, BridgeStatusSensor)
+            else "sensor.lists_assistant_google_keep_synchronization"
+        )
+        entity.entity_id = suggested_id
+        if (
+            old_entity_id is not None
+            and old_entity_id == generated_id
+            and old_entity_id != suggested_id
+            and registry.async_get(suggested_id) is None
+        ):
+            registry.async_update_entity(old_entity_id, new_entity_id=suggested_id)
+    async_add_entities(entities)
 
 
 class BridgeStatusSensor(SensorEntity):
     """Keep pending/conflict state visible even when the cloud is unavailable."""
 
     _attr_has_entity_name = True
-    _attr_suggested_object_id = "shopping_list_synchronization"
     _attr_translation_key = "shopping_list_sync"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_entity_category = EntityCategory.DIAGNOSTIC

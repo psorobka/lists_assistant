@@ -65,6 +65,13 @@
         "data": {
           "confirm": "Merge both lists and enable synchronization"
         }
+      },
+      "conflict_policy": {
+        "title": "Synchronization conflicts",
+        "description": "Choose which version to keep after conflicting edits. Ordinary changes still synchronize both ways. This includes deletions. Manual conflicts wait in Repairs while other products keep synchronizing. An unavailable source or missing ID mapping defers the decision. Uncertain writes need separate verification.",
+        "data": {
+          "conflict_policy": "When changes conflict, keep the version from"
+        }
       }
     },
     "error": {
@@ -102,7 +109,7 @@
     },
     "sensor": {
       "shopping_list_sync": {
-        "name": "Shopping List synchronization",
+        "name": "Listonic synchronization",
         "state": {
           "conflict": "Needs resolution",
           "confirmation_required": "Confirm the list merge",
@@ -211,6 +218,13 @@
         "data": {
           "confirm": "Merge both lists and enable synchronization"
         }
+      },
+      "conflict_policy": {
+        "title": "Synchronization conflicts",
+        "description": "Choose which version to keep after conflicting edits. Ordinary changes still synchronize both ways. This includes deletions. Manual conflicts wait in Repairs while other products keep synchronizing. An unavailable source or missing ID mapping defers the decision. Uncertain writes need separate verification.",
+        "data": {
+          "conflict_policy": "When changes conflict, keep the version from"
+        }
       }
     }
   },
@@ -238,48 +252,106 @@
     "list_unavailable": {
       "title": "Listonic list unavailable",
       "description": "Open integration options and check the list binding. Inspect conflicts and uncertain writes with lists_assistant.get_sync_issues, then use lists_assistant.resolve_sync_conflict or lists_assistant.resolve_sync_write. For a storage error, preserve the data file and check logs before restoring a backup."
+    },
+    "sync_conflicts": {
+      "title": "Shopping List conflicts: {count} ({source})",
+      "fix_flow": {
+        "step": {
+          "choose": {
+            "title": "Resolve conflicts together",
+            "description": "Choose the source to keep. Deletions on that side will be propagated to the other list.",
+            "data": {
+              "choose": "Keep versions from"
+            }
+          },
+          "confirm": {
+            "title": "Confirm decisions ({count})",
+            "description": "{preview}\n\n∅ means deleted, [x] completed, [ ] needs action. Confirming saves decisions in the queue. Synchronization may wait for a connection.",
+            "data": {
+              "confirm": "Apply the changes shown"
+            }
+          }
+        },
+        "error": {
+          "unavailable": "A safe preview is unavailable. Check connectivity, mappings and uncertain writes.",
+          "changed": "The list changed. Review the updated preview and confirm again.",
+          "confirm_required": "Confirm the changes shown."
+        },
+        "abort": {
+          "unavailable": "The synchronization bridge is unavailable.",
+          "storage_error": "Decisions could not be saved. Synchronization has stopped."
+        }
+      }
     }
   },
   "services": {
     "sync_all": {
       "name": "Synchronize all connected lists",
       "description": "Run every configured Shopping List bridge for this account and wait for its current work to finish.",
-      "fields": {"config_entry_id": {"name": "Account"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        }
+      }
     },
     "sync_listonic": {
       "name": "Synchronize Listonic",
       "description": "Refresh Listonic and reconcile its selected list with Home Assistant Shopping List.",
-      "fields": {"config_entry_id": {"name": "Account"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        }
+      }
     },
     "sync_gkeep": {
       "name": "Synchronize Google Keep",
       "description": "Refresh Google Keep and reconcile its selected list with Home Assistant Shopping List.",
-      "fields": {"config_entry_id": {"name": "Account"}}
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        }
+      }
     },
     "get_sync_issues": {
       "name": "Show synchronization issues",
       "description": "Return pending writes and conflicts for the Listonic and Google Keep bridges.",
       "fields": {
-        "config_entry_id": {"name": "Account"}
+        "config_entry_id": {
+          "name": "Account"
+        }
       }
     },
     "resolve_keep_write": {
       "name": "Resolve an uncertain Google Keep write",
       "description": "Confirm the result after inspecting Home Assistant and Google Keep.",
       "fields": {
-        "config_entry_id": {"name": "Account"},
-        "operation_id": {"name": "Operation ID"},
-        "outcome": {"name": "Verified result"},
-        "target_item_id": {"name": "New target item ID"}
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "operation_id": {
+          "name": "Operation ID"
+        },
+        "outcome": {
+          "name": "Verified result"
+        },
+        "target_item_id": {
+          "name": "New target item ID"
+        }
       }
     },
     "resolve_keep_conflict": {
       "name": "Resolve a Google Keep synchronization conflict",
       "description": "Choose which version to keep after an edit or deletion conflict.",
       "fields": {
-        "config_entry_id": {"name": "Account"},
-        "conflict_id": {"name": "Conflict ID"},
-        "choose": {"name": "Keep this version"}
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "conflict_id": {
+          "name": "Conflict ID"
+        },
+        "choose": {
+          "name": "Keep this version"
+        }
       }
     },
     "get_lists": {
@@ -410,6 +482,14 @@
     "shopping_list": {
       "options": {
         "none": "No bridge"
+      }
+    },
+    "conflict_policy": {
+      "options": {
+        "manual": "Resolve manually (hold conflicting items)",
+        "home_assistant": "Home Assistant",
+        "listonic": "Listonic",
+        "google_keep": "Google Keep"
       }
     }
   }

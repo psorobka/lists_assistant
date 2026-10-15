@@ -9,6 +9,16 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1] / "custom_components" / "lists_assistant"
 
 
+@pytest.mark.parametrize(
+    "filename", ["strings.json", "translations/en.json", "translations/pl.json"]
+)
+def test_fixable_issue_uses_flow_instead_of_static_description(filename):
+    """Hassfest treats description and fix_flow as mutually exclusive."""
+    issues = json.loads((ROOT / filename).read_text())["issues"]
+    for key, issue in issues.items():
+        assert not ("fix_flow" in issue and "description" in issue), key
+
+
 def flatten(value, prefix=""):
     result = {}
     for key, text in value.items():

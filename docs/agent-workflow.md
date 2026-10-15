@@ -34,7 +34,7 @@ To zestawy startowe; przy zmianie kontraktu dodaj testy jego odbiorców.
 | Kolejka, offline, niepewne zapisy, Assist i Google Keep | `bridge.py`, `keep_bridge.py`, `keep_api.py`, `bridge_store.py`, `coordinator.py` | `test_shopping_list_bridge.py`, `test_keep_api.py`, `test_bridge_store.py` |
 | Format i uszkodzenie Store | `bridge_store.py` | `test_bridge_store.py`, `test_shopping_list_bridge.py` |
 | Akcje CRUD list i produktów | `services.py`, `api.py`, `services.yaml` | `test_account_services.py`, `test_api.py`, `test_translations.py` |
-| Rozwiązywanie konfliktu/zapisu, sensor, diagnostyka | `bridge_services.py`, `sensor.py`, `diagnostics.py` | `test_shopping_list_bridge.py` |
+| Rozwiązywanie konfliktu/zapisu, preferencja, Naprawy, sensor, diagnostyka | `conflicts.py`, `repairs.py`, `config_flow.py`, `bridge_services.py`, `sensor.py`, `diagnostics.py` | `test_shopping_list_bridge.py`, `test_config_flow.py`, `test_translations.py` |
 | Teksty i placeholdery | `strings.json`, `translations/en.json`, `translations/pl.json` | `test_translations.py` |
 | Wydanie, domena i HACS | `manifest.json`, główne `hacs.json`, `pyproject.toml`, `.github/workflows/ci.yml` | `test_release.py`, `test_config_flow.py`, `test_lifecycle.py`, E2E |
 | Pełny przepływ UI | odpowiedni obszar powyżej | `e2e/ha_ui.py`, instrukcja w `docs/e2e.md` |

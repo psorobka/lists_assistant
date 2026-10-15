@@ -202,14 +202,600 @@ async def settle(hass, bridge, refresh=False):
     await bridge.async_wait_idle()
 
 
+async def make_edit_conflicts(hass, native_shopping, api, cloud, policy="manual"):
+    """Create two real offline edit conflicts against a common base."""
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "conflict_policy": policy}
+    )
+    bridge = await setup(hass, entry)
+    for name in ("Milk", "Bread"):
+        await todo(hass, native_shopping, "add_item", item=name)
+    await settle(hass, bridge)
+    api.offline = True
+    await bridge.coordinator.async_refresh()
+    for item in await local_items(hass, native_shopping):
+        await todo(
+            hass,
+            native_shopping,
+            "update_item",
+            item=item["uid"],
+            rename=f"HA {item['summary']}",
+        )
+    await settle(hass, bridge)
+    for item in cloud["1"]["Items"]:
+        item["Name"] = f"Phone {item['Name']}"
+    api.offline = False
+    await settle(hass, bridge, refresh=True)
+    return entry, bridge
+
+
+@pytest.mark.parametrize(
+    "policy,prefix", [("listonic", "Phone"), ("home_assistant", "HA")]
+)
+async def test_automatic_conflicts_preserve_metadata(
+    hass, native_shopping, api, cloud, policy, prefix
+):
+    _, bridge = await make_edit_conflicts(hass, native_shopping, api, cloud, policy)
+    assert bridge.status == "synchronized"
+    assert not bridge.state["conflicts"] and not bridge.state["resolutions"]
+    assert all(item["Name"].startswith(prefix) for item in cloud["1"]["Items"])
+    assert all(item["Description"] == "Keep me" for item in cloud["1"]["Items"])
+    assert {item["summary"] for item in await local_items(hass, native_shopping)} == {
+        item["Name"] for item in cloud["1"]["Items"]
+    }
+
+
+async def test_manual_conflicts_in_fridge_allow_other_products(
+    hass, native_shopping, api, cloud
+):
+    entry, bridge = await make_edit_conflicts(hass, native_shopping, api, cloud)
+    assert len(bridge.state["conflicts"]) == 2
+    before = deepcopy(bridge.state["conflicts"])
+    await todo(hass, native_shopping, "add_item", item="Unaffected eggs")
+    await settle(hass, bridge)
+    assert bridge.status == "conflict"
+    assert bridge.state["conflicts"] == before
+    assert any(item["Name"] == "Unaffected eggs" for item in cloud["1"]["Items"])
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    bridge = await setup(hass, entry)
+    assert bridge.state["conflicts"] == before
+
+
+@pytest.mark.parametrize("changed", [False, True])
+async def test_repair_preview_rechecks_before_bulk_commit(
+    hass, native_shopping, api, cloud, changed
+):
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.lists_assistant.repairs import ConflictRepairFlow
+
+    entry, bridge = await make_edit_conflicts(hass, native_shopping, api, cloud)
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"listonic_{entry.entry_id}_conflicts"
+    )
+    assert issue.is_fixable
+    flow = ConflictRepairFlow()
+    flow.hass = hass
+    flow.data = {"entry_id": entry.entry_id, "source": "listonic"}
+    assert (await flow.async_step_init())["step_id"] == "choose"
+    result = await flow.async_step_choose({"choose": "listonic"})
+    assert result["step_id"] == "confirm"
+    assert "Phone Milk" in result["description_placeholders"]["preview"]
+    assert (await flow.async_step_confirm({"confirm": False}))["errors"]
+    if changed:
+        cloud["1"]["Items"][0]["Name"] = "Changed during preview"
+        result = await flow.async_step_confirm({"confirm": True})
+        assert result["errors"] == {"base": "changed"}
+        assert not bridge.state.get("resolutions")
+    # Stop network writes to inspect the durable decisions independently of execution.
+    with patch.object(bridge, "request_sync"):
+        result = await flow.async_step_confirm({"confirm": True})
+    assert result["type"] == "create_entry"
+    saved = await bridge.store.store.async_load()
+    assert len(saved["bindings"]["1"]["resolutions"]) == 2
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    bridge = await setup(hass, entry)
+    assert bridge.status == "synchronized"
+    assert not bridge.state["resolutions"]
+    assert all(
+        not item["summary"].startswith("HA ")
+        for item in await local_items(hass, native_shopping)
+    )
+
+
+async def test_native_repairs_manager_loads_conflict_flow(
+    hass, native_shopping, api, cloud
+):
+    from homeassistant.components.repairs import repairs_flow_manager
+    from homeassistant.setup import async_setup_component
+
+    entry, bridge = await make_edit_conflicts(hass, native_shopping, api, cloud)
+    assert await async_setup_component(hass, "repairs", {})
+    manager = repairs_flow_manager(hass)
+    result = await manager.async_init(
+        DOMAIN, data={"issue_id": f"listonic_{entry.entry_id}_conflicts"}
+    )
+    assert result["step_id"] == "choose"
+    result = await manager.async_configure(
+        result["flow_id"], {"choose": "home_assistant"}
+    )
+    assert result["step_id"] == "confirm"
+    result = await manager.async_configure(result["flow_id"], {"confirm": True})
+    assert result["type"] == "create_entry"
+    await settle(hass, bridge)
+    assert bridge.status == "synchronized"
+
+
+@pytest.mark.parametrize(
+    "failure", ["unavailable", "changed_identity", "uncertain", "storage"]
+)
+async def test_repairs_fail_without_writes(hass, native_shopping, api, cloud, failure):
+    from custom_components.lists_assistant.repairs import ConflictRepairFlow
+
+    entry, bridge = await make_edit_conflicts(hass, native_shopping, api, cloud)
+    flow = ConflictRepairFlow()
+    flow.hass = hass
+    flow.data = {"entry_id": entry.entry_id, "source": "listonic"}
+    before = deepcopy(cloud)
+    api.update_item.reset_mock()
+    if failure == "unavailable":
+        api.offline = True
+    elif failure == "changed_identity":
+        bridge.state["local_list_id"] = "different-list"
+    elif failure == "uncertain":
+        bridge.state["pending"]["uncertain"] = {"state": "uncertain"}
+    if failure == "storage":
+        await flow.async_step_choose({"choose": "listonic"})
+        with patch.object(bridge, "_save", side_effect=BridgeStorageError("disk full")):
+            result = await flow.async_step_confirm({"confirm": True})
+        assert result["reason"] == "storage_error"
+        assert bridge._storage_failed
+    else:
+        result = await flow.async_step_choose({"choose": "listonic"})
+        assert result["errors"] == {"base": "unavailable"}
+    assert cloud == before
+    api.update_item.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "policy,removed,expected_count",
+    [
+        ("listonic", "local", 1),
+        ("home_assistant", "local", 0),
+        ("listonic", "remote", 0),
+        ("home_assistant", "remote", 1),
+    ],
+)
+async def test_auto_delete_edit_conflicts(
+    hass, native_shopping, api, cloud, policy, removed, expected_count
+):
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "conflict_policy": policy}
+    )
+    bridge = await setup(hass, entry)
+    await todo(hass, native_shopping, "add_item", item="Milk")
+    await settle(hass, bridge)
+    uid = (await local_items(hass, native_shopping))[0]["uid"]
+    api.offline = True
+    await bridge.coordinator.async_refresh()
+    if removed == "local":
+        await todo(hass, native_shopping, "remove_item", item=uid)
+        cloud["1"]["Items"][0].update(Name="Edited milk", Checked=1)
+    else:
+        await todo(
+            hass,
+            native_shopping,
+            "update_item",
+            item=uid,
+            rename="Edited milk",
+            status="completed",
+        )
+        cloud["1"]["Items"] = []
+    await settle(hass, bridge)
+    api.offline = False
+    await settle(hass, bridge, refresh=True)
+    assert bridge.status == "synchronized"
+    assert (
+        len(cloud["1"]["Items"])
+        == len(await local_items(hass, native_shopping))
+        == expected_count
+    )
+    assert not bridge.state["resolutions"]
+
+
+@pytest.mark.parametrize(
+    "policy,authority_unchanged",
+    [
+        ("manual", False),
+        ("home_assistant", False),
+        ("listonic", False),
+        ("google_keep", False),
+        ("listonic", True),
+        ("google_keep", True),
+    ],
+)
+async def test_three_sources_obey_global_conflict_policy(
+    hass, native_shopping, api, cloud, policy, authority_unchanged
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            "conflict_policy": policy,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fake-token",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        bridge = await setup(hass, entry)
+        keep = bridge.coordinator.keep_bridge
+        await todo(hass, native_shopping, "add_item", item="Shared")
+        await settle_keep(hass, bridge, keep)
+        uid = (await local_items(hass, native_shopping))[0]["uid"]
+        keep_id = keep.state["records"][uid]["remote_id"]
+        async with bridge._lock, keep._lock:
+            await todo(hass, native_shopping, "update_item", item=uid, rename="HA edit")
+            if not authority_unchanged or policy != "listonic":
+                cloud["1"]["Items"][0]["Name"] = "Listonic edit"
+            if not authority_unchanged or policy != "google_keep":
+                FakeGoogleKeepClient.items[keep_id]["name"] = "Keep edit"
+            await bridge.coordinator.async_refresh()
+            keep.request_sync()
+        await settle_keep(hass, bridge, keep)
+        if policy == "manual":
+            assert bridge.state["conflicts"] and keep.state["conflicts"]
+            await todo(hass, native_shopping, "add_item", item="Unrelated")
+            await settle_keep(hass, bridge, keep)
+            assert cloud["1"]["Items"][0]["Name"] == "Listonic edit"
+            assert FakeGoogleKeepClient.items[keep_id]["name"] == "Keep edit"
+            assert len(cloud["1"]["Items"]) == len(FakeGoogleKeepClient.items) == 2
+        else:
+            expected = {
+                "home_assistant": "HA edit",
+                "listonic": "Listonic edit",
+                "google_keep": "Keep edit",
+            }[policy]
+            if authority_unchanged:
+                expected = "Shared"
+            assert bridge.status == keep.status == "synchronized"
+            assert (await local_items(hass, native_shopping))[0]["summary"] == expected
+            assert cloud["1"]["Items"][0]["Name"] == expected
+            assert FakeGoogleKeepClient.items[keep_id]["name"] == expected
+
+
+@pytest.mark.parametrize("failure", ["unmapped", "offline", "changed"])
+async def test_third_authority_is_checked_before_writing(
+    hass, native_shopping, api, cloud, failure
+):
+    from custom_components.lists_assistant.keep_api import GoogleKeepError
+
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            "conflict_policy": "google_keep",
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fake-token",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        bridge = await setup(hass, entry)
+        keep = bridge.coordinator.keep_bridge
+        await todo(hass, native_shopping, "add_item", item="Shared")
+        await settle_keep(hass, bridge, keep)
+        uid = (await local_items(hass, native_shopping))[0]["uid"]
+        keep_id = keep.state["records"][uid]["remote_id"]
+        # Pause Keep's own worker, keeping its valid mappings and client available.
+        with patch.object(keep, "request_sync"):
+            async with bridge._lock:
+                await todo(
+                    hass, native_shopping, "update_item", item=uid, rename="HA edit"
+                )
+                cloud["1"]["Items"][0]["Name"] = "Listonic edit"
+                await bridge.coordinator.async_refresh()
+                if failure == "unmapped":
+                    keep.state["records"].pop(uid)
+                elif failure == "offline":
+                    keep.client.async_items = AsyncMock(
+                        side_effect=GoogleKeepError("offline")
+                    )
+                else:
+                    original = api.lists.side_effect
+                    changed = False
+
+                    async def concurrent_authority_edit():
+                        nonlocal changed
+                        if not changed and bridge.state.get("resolutions"):
+                            changed = True
+                            FakeGoogleKeepClient.items[keep_id]["name"] = (
+                                "Latest Keep edit"
+                            )
+                        return await original()
+
+                    api.lists.side_effect = concurrent_authority_edit
+            await settle(hass, bridge)
+            if failure == "changed":
+                assert changed
+                assert cloud["1"]["Items"][0]["Name"] == "Latest Keep edit"
+                assert (await local_items(hass, native_shopping))[0][
+                    "summary"
+                ] == "Latest Keep edit"
+                assert bridge.status == "synchronized"
+            else:
+                assert bridge.status == "conflict" and uid in bridge.state["conflicts"]
+                assert cloud["1"]["Items"][0]["Name"] == "Listonic edit"
+                assert (await local_items(hass, native_shopping))[0][
+                    "summary"
+                ] == "HA edit"
+
+
+@pytest.mark.parametrize(
+    "policy,removed,count",
+    [
+        ("google_keep", "local", 1),
+        ("home_assistant", "local", 0),
+        ("google_keep", "remote", 0),
+        ("home_assistant", "remote", 1),
+    ],
+)
+async def test_keep_only_auto_delete_edit_conflict(
+    hass, native_shopping, policy, removed, count
+):
+    FakeGoogleKeepClient.items = {"keep-1": {"name": "Milk", "checked": False}}
+    FakeGoogleKeepClient.next_id = 1
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    await todo(hass, native_shopping, "add_item", item="Milk")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="keep:keep@example.test",
+        data={
+            "sources": ["google_keep"],
+            "conflict_policy": policy,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fake-token",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        keep = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await hass.async_block_till_done()
+        await keep.async_wait_idle()
+        uid = (await local_items(hass, native_shopping))[0]["uid"]
+        async with keep._lock:
+            if removed == "local":
+                await todo(hass, native_shopping, "remove_item", item=uid)
+                FakeGoogleKeepClient.items["keep-1"] = {
+                    "name": "Edited milk",
+                    "checked": True,
+                }
+            else:
+                await todo(
+                    hass,
+                    native_shopping,
+                    "update_item",
+                    item=uid,
+                    rename="Edited milk",
+                    status="completed",
+                )
+                FakeGoogleKeepClient.items = {}
+            keep.request_sync()
+        await hass.async_block_till_done()
+        await keep.async_wait_idle()
+        assert keep.status == "synchronized"
+        assert (
+            len(FakeGoogleKeepClient.items)
+            == len(await local_items(hass, native_shopping))
+            == count
+        )
+        assert len(keep.state["records"]) == count
+        assert not keep.state["resolutions"]
+        if count:
+            assert (await local_items(hass, native_shopping))[0][
+                "status"
+            ] == "completed"
+
+
+@pytest.mark.parametrize("policy", ["listonic", "google_keep"])
+async def test_recreated_ha_item_preserves_both_remote_identities(
+    hass, native_shopping, api, cloud, policy
+):
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            "conflict_policy": policy,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fake-token",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        bridge = await setup(hass, entry)
+        keep = bridge.coordinator.keep_bridge
+        await todo(hass, native_shopping, "add_item", item="Shared")
+        await settle_keep(hass, bridge, keep)
+        uid = (await local_items(hass, native_shopping))[0]["uid"]
+        remote_id = bridge.state["records"][uid]["remote_id"]
+        keep_id = keep.state["records"][uid]["remote_id"]
+        async with bridge._lock, keep._lock:
+            await todo(hass, native_shopping, "remove_item", item=uid)
+            cloud["1"]["Items"][0]["Name"] = "Listonic survivor"
+            FakeGoogleKeepClient.items[keep_id]["name"] = "Keep survivor"
+            await bridge.coordinator.async_refresh()
+            keep.request_sync()
+        await settle_keep(hass, bridge, keep)
+        assert bridge.status == keep.status == "synchronized"
+        new_uid = (await local_items(hass, native_shopping))[0]["uid"]
+        assert bridge.state["records"][new_uid]["remote_id"] == remote_id
+        assert keep.state["records"][new_uid]["remote_id"] == keep_id
+        assert len(cloud["1"]["Items"]) == len(FakeGoogleKeepClient.items) == 1
+        assert cloud["1"]["Items"][0]["Description"] == "Keep me"
+
+
+@pytest.mark.parametrize("removed", ["local", "remote"])
+async def test_uncertain_recreation_needs_explicit_identity(
+    hass, native_shopping, api, cloud, removed
+):
+    from homeassistant.exceptions import HomeAssistantError
+
+    entry = account(hass)
+    policy = "listonic" if removed == "local" else "home_assistant"
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "conflict_policy": policy}
+    )
+    bridge = await setup(hass, entry)
+    await todo(hass, native_shopping, "add_item", item="Milk")
+    await settle(hass, bridge)
+    uid = (await local_items(hass, native_shopping))[0]["uid"]
+    api.offline = True
+    await bridge.coordinator.async_refresh()
+    if removed == "local":
+        await todo(hass, native_shopping, "remove_item", item=uid)
+        cloud["1"]["Items"][0]["Name"] = "Edited milk"
+    else:
+        await todo(hass, native_shopping, "update_item", item=uid, rename="Edited milk")
+        cloud["1"]["Items"] = []
+        api.ambiguous_add = True
+    await settle(hass, bridge)
+    original_add = ShoppingData.async_add
+
+    async def lose_local_response(data, *args, **kwargs):
+        await original_add(data, *args, **kwargs)
+        raise HomeAssistantError("lost response")
+
+    api.offline = False
+    if removed == "local":
+        with patch.object(ShoppingData, "async_add", new=lose_local_response):
+            await settle(hass, bridge, refresh=True)
+    else:
+        await settle(hass, bridge, refresh=True)
+    assert bridge.status == "conflict"
+    pending_id = next(
+        key for key, op in bridge.state["pending"].items() if op["state"] == "uncertain"
+    )
+    target_id = (
+        (await local_items(hass, native_shopping))[0]["uid"]
+        if removed == "local"
+        else cloud["1"]["Items"][0]["Id"]
+    )
+    await bridge.async_resolve_write(pending_id, "applied", target_id)
+    await settle(hass, bridge, refresh=True)
+    assert bridge.status == "synchronized"
+    assert len(bridge.state["records"]) == 1
+    assert (
+        len(cloud["1"]["Items"]) == len(await local_items(hass, native_shopping)) == 1
+    )
+
+
+@pytest.mark.parametrize("failure", ["corrupt_store", "disk_full", "read_failure"])
+async def test_keep_failure_never_discards_store_or_replays_writes(
+    hass, native_shopping, api, cloud, failure
+):
+    from custom_components.lists_assistant.keep_api import GoogleKeepError
+
+    FakeGoogleKeepClient.items = {}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    FakeGoogleKeepClient.fail_add_after_create = False
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "fake-token",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        bridge = await setup(hass, entry)
+        keep = bridge.coordinator.keep_bridge
+        await settle_keep(hass, bridge, keep)
+        if failure == "corrupt_store":
+            await keep.storage.async_save({"records": []})
+            assert await hass.config_entries.async_unload(entry.entry_id)
+            bridge = await setup(hass, entry)
+            keep = bridge.coordinator.keep_bridge
+            assert keep._storage_failed and keep.status == "storage_error"
+            assert await keep.storage.async_load() == {"records": []}
+        elif failure == "disk_full":
+            with patch.object(
+                keep.storage, "async_save", side_effect=OSError("disk full")
+            ):
+                await todo(hass, native_shopping, "add_item", item="Preserve locally")
+                await settle_keep(hass, bridge, keep)
+            assert keep._storage_failed and keep.status == "storage_error"
+        else:
+            with patch.object(
+                keep.client, "async_items", side_effect=GoogleKeepError("offline")
+            ):
+                await todo(hass, native_shopping, "add_item", item="Preserve locally")
+                await settle_keep(hass, bridge, keep)
+            assert keep.status == "pending"
+        assert not FakeGoogleKeepClient.items
+        if failure != "read_failure":
+            keep.request_sync(force=True)
+            await settle_keep(hass, bridge, keep)
+            assert not FakeGoogleKeepClient.items
+
+
 async def test_full_bidirectional_crud_and_bulk(hass, native_shopping, api, cloud):
     entry = account(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.unique_id}:shopping_list_sync",
+        suggested_object_id="shopping_list_synchronization",
+        original_name="Shopping List synchronization",
+    )
     bridge = await setup(hass, entry)
     assert bridge.status == "synchronized"
     sensor_id = er.async_get(hass).async_get_entity_id(
         "sensor", DOMAIN, f"{entry.unique_id}:shopping_list_sync"
     )
-    assert sensor_id == "sensor.shopping_list_synchronization"
+    assert sensor_id == "sensor.lists_assistant_listonic_synchronization"
     assert hass.states.get(sensor_id).state == "synchronized"
 
     await todo(hass, native_shopping, "add_item", item="Mleko")
@@ -582,6 +1168,10 @@ async def test_target_change_shelves_old_pending_ids(hass, native_shopping, api,
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"confirm": True}
     )
+    if result.get("step_id") == "conflict_policy":
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"conflict_policy": "manual"}
+        )
     assert result["type"] == "create_entry"
     await hass.async_block_till_done()
     new_bridge = hass.data[DOMAIN][entry.entry_id].bridge
@@ -615,6 +1205,10 @@ async def test_options_keeps_bridge_out_of_selected_todo_lists(
         result["flow_id"], {"confirm": True}
     )
 
+    if result.get("step_id") == "conflict_policy":
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"conflict_policy": "manual"}
+        )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_LISTS] == ["1"]
     assert result["data"][CONF_BRIDGE] == "3"
@@ -633,6 +1227,10 @@ async def test_disconnect_keeps_items_and_queue(hass, native_shopping, api, clou
             CONF_BRIDGE: "none",
         },
     )
+    if result.get("step_id") == "conflict_policy":
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"conflict_policy": "manual"}
+        )
     assert result["type"] == "create_entry"
     await hass.async_block_till_done()
     assert hass.data[DOMAIN][entry.entry_id].bridge is None
@@ -975,6 +1573,10 @@ async def test_google_keep_voice_items_share_ha_and_listonic(
     ):
         list_bridge = await setup(hass, entry)
         keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        keep_sensor_id = er.async_get(hass).async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.unique_id}:google_keep_sync"
+        )
+        assert keep_sensor_id == "sensor.lists_assistant_google_keep_synchronization"
         await settle_keep(hass, list_bridge, keep_bridge)
 
         assert keep_bridge.status == "synchronized"
@@ -1006,6 +1608,41 @@ async def test_google_keep_voice_items_share_ha_and_listonic(
         assert local[0]["status"] == "completed"
         assert cloud["1"]["Items"][0]["Checked"] == 1
         assert keep_bridge.status == "synchronized"
+
+
+async def test_same_product_in_keep_and_listonic_is_merged_once(
+    hass, native_shopping, api, cloud
+):
+    FakeGoogleKeepClient.items = {"keep-item-1": {"name": "Oat milk", "checked": False}}
+    FakeGoogleKeepClient.next_id = 0
+    FakeGoogleKeepClient.fail_auth = False
+    cloud["1"]["Items"] = [{"Id": "listonic-item-1", "Name": "Oat milk", "Checked": 0}]
+    entry = account(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_KEEP_ENABLED: True,
+            CONF_KEEP_USERNAME: "keep@example.test",
+            CONF_KEEP_TOKEN: "aas_et/test-only",
+            CONF_KEEP_LIST_ID: "keep-list-id",
+        },
+    )
+
+    with patch(
+        "custom_components.lists_assistant.keep_bridge.GoogleKeepClient",
+        FakeGoogleKeepClient,
+    ):
+        list_bridge = await setup(hass, entry)
+        keep_bridge = hass.data[DOMAIN][entry.entry_id].keep_bridge
+        await settle_keep(hass, list_bridge, keep_bridge)
+
+    local = await local_items(hass, native_shopping)
+    assert len(local) == 1
+    assert [item["Name"] for item in cloud["1"]["Items"]] == ["Oat milk"]
+    assert len(FakeGoogleKeepClient.items) == 1
+    assert len(list_bridge.state["records"]) == 1
+    assert len(keep_bridge.state["records"]) == 1
 
 
 async def test_keep_local_crud_reaches_keep_and_listonic(

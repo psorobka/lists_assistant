@@ -16,9 +16,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import ApiError, AuthError, ListonicClient
 from .bridge import shopping_list_entity
 from .bridge_store import BridgeStorageError, BridgeStore
+from .conflicts import policy_choices
 from .const import (
     CONF_BRIDGE,
     CONF_BRIDGE_CONFIRMED,
+    CONF_CONFLICT_POLICY,
     CONF_INTERVAL,
     CONF_KEEP_ANDROID_ID,
     CONF_KEEP_ENABLED,
@@ -43,6 +45,32 @@ from .keep_api import (
 )
 
 CONF_EMAIL = "email"
+
+
+def conflict_policy_form(flow, data, current=None):
+    """Offer a final policy step after all account and merge confirmations."""
+    flow._selection = data
+    combined = {**(current or {}), **data}
+    choices = policy_choices(combined)
+    default = combined.get(CONF_CONFLICT_POLICY, "manual")
+    if default not in choices:
+        default = "manual"
+    return flow.async_show_form(
+        step_id="conflict_policy",
+        data_schema=vol.Schema(
+            {
+                vol.Required(
+                    CONF_CONFLICT_POLICY, default=default
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=choices,
+                        translation_key="conflict_policy",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        ),
+    )
 
 
 def _interval_selector():
@@ -442,8 +470,19 @@ class ListonicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     def _finish(self, data):
+        return conflict_policy_form(self, data)
+
+    async def async_step_conflict_policy(self, user_input=None):
+        """Choose conflict handling as the last configuration step."""
+        if user_input is None:
+            return self._finish(self._selection)
+        choice = user_input[CONF_CONFLICT_POLICY]
+        if choice not in policy_choices(self._selection):
+            return self._finish(self._selection)
+        self._selection[CONF_CONFLICT_POLICY] = choice
         return self.async_create_entry(
-            title=integration_title(data.get(CONF_SOURCES, self._sources)), data=data
+            title=integration_title(self._selection.get(CONF_SOURCES, self._sources)),
+            data=self._selection,
         )
 
     async def async_step_bridge(self, user_input=None):
@@ -843,7 +882,20 @@ class ListonicOptionsFlow(config_entries.OptionsFlowWithReload):
         )
 
     def _finish(self, data):
-        return self.async_create_entry(title="", data=data)
+        if data.get(CONF_KEEP_ENABLED) is False:
+            data[CONF_KEEP_LIST_ID] = "none"
+        return conflict_policy_form(self, data, settings(self.config_entry))
+
+    async def async_step_conflict_policy(self, user_input=None):
+        """Change the global preference in options, including legacy entries."""
+        if user_input is None:
+            return self._finish(self._selection)
+        combined = {**settings(self.config_entry), **self._selection}
+        choice = user_input[CONF_CONFLICT_POLICY]
+        if choice not in policy_choices(combined):
+            return self._finish(self._selection)
+        self._selection[CONF_CONFLICT_POLICY] = choice
+        return self.async_create_entry(title="", data=self._selection)
 
     async def async_step_bridge(self, user_input=None):
         if bridge_in_use(self.hass, self.config_entry.entry_id):

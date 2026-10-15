@@ -22,10 +22,11 @@ w HA jako encje `todo`. Jeśli połączysz listy z obu usług z Shopping List HA
 ta lista będzie wspólnym punktem synchronizacji. Szczegóły i ograniczenia logowania
 opisuje [instrukcja Google Keep](google-keep.md).
 
-Istniejące wpisy z obu stron zostają zachowane. Pierwsze scalenie traktuje je
-jako osobne produkty: jedna pozycja „mleko” w HA i jedna „mleko” w Listonic dadzą
-dwie pozycje w każdej liście. Nie zgadujemy tożsamości produktów po nazwie.
-Po pierwszym scaleniu mapowania ID zapobiegają ponownemu importowi przy reload.
+Przy pierwszym scaleniu wpisy o tej samej nazwie (bez rozróżniania wielkości liter
+i nadmiarowych spacji) są łączone, jeśli po każdej stronie jest dokładnie po jednym
+takim wpisie. Mapowania ID zapobiegają ponownemu importowi przy reload. Gdy nazwa
+powtarza się po którejkolwiek stronie, dopasowanie jest niejednoznaczne i wpisy
+pozostają osobnymi produktami; integracja nie usuwa istniejących pozycji.
 
 Wcześniejsza konfiguracja, utworzona zanim działał bridge, wymaga wejścia w
 **Opcje** i potwierdzenia scalenia. Sam wcześniej zapisany wybór listy nie
@@ -63,7 +64,7 @@ pozostają w natywnej Shopping List i zostaną porównane po odzyskaniu połącz
 | --- | --- |
 | `synchronized` | Brak oczekujących zmian i zgodny wspólny stan. |
 | `pending` | Oczekiwanie na połączenie, retry lub odczyt potwierdzający zapis. |
-| `conflict` | Sprzeczna edycja/usunięcie albo niepewny wynik zapisu; potrzebna decyzja. |
+| `conflict` | Konfliktowe produkty czekają na decyzję; pozostałe synchronizują się dalej. Niepewny zapis może zatrzymać most. |
 | `shelved` | Zmiany starego powiązania są zachowane i nie trafiają na nową listę. |
 | `shopping_list_missing` | Natywna lista zakupów nie jest gotowa. |
 | `list_unavailable` | Wybrana lista Listonic jest nieobecna lub niedostępna. |
@@ -82,6 +83,31 @@ dlaczego została odtworzona/usunięta konfiguracja natywnej Shopping List;
 automatyczny reset mapowań nie jest wykonywany.
 
 ## Rozstrzyganie konfliktów
+
+Ostatni krok konfiguracji oraz Opcji pozwala wybrać sposób rozstrzygania:
+**Home Assistant**, **Listonic**, **Google Keep** albo **ręcznie (konflikty
+w lodówce)**. Dostępne są tylko źródła powiązane z Shopping List. Domyślnie,
+także dla istniejących wpisów, obowiązuje tryb ręczny. Preferencja obejmuje
+sprzeczne zmiany nazw, odhaczenia i usunięcia; zwykła synchronizacja pozostaje
+dwukierunkowa. Jeśli konflikt dotyczy dwóch innych źródeł, preferowana wersja
+jest pobierana z trzeciego źródła przez zapisane mapowanie ID. Brak mapowania,
+niedostępność źródła lub jego niepewny zapis wstrzymuje decyzję; nazwa produktu
+nie zastępuje ID.
+
+W trybie ręcznym konfliktowy produkt jest zatrzymywany również w drugim moście,
+aby nie przenosić nierozstrzygniętej wersji do kolejnego źródła. Pozostałe
+produkty nadal się synchronizują. Konflikty i zapisane decyzje przeżywają reload.
+
+Bez YAML: wejdź w **Ustawienia → System → Naprawy**, otwórz konflikt listy,
+wybierz źródło dla wszystkich pokazanych produktów i sprawdź podgląd.
+**∅ oznacza usunięcie**, [x] produkt kupiony, [ ] produkt do kupienia. Zatwierdzenie
+zapisuje decyzje w trwałej kolejce; nie oznacza jednoczesnego zapisu do wszystkich
+usług. Jeśli dane zmieniły się od otwarcia podglądu, formularz pokazuje nowe dane
+i wymaga ponownego zatwierdzenia. Listonic i Google Keep mają osobne zgłoszenia
+naprawcze. Niepewne wyniki zapisów pozostają osobnym problemem: wybór preferencji
+nie potwierdza, czy wcześniejsze dodanie faktycznie nastąpiło.
+
+Akcje poniżej nadal pozwalają sprawdzać szczegóły i rozstrzygać pojedyncze pozycje.
 
 W **Narzędziach deweloperskich → Akcje** wywołaj:
 

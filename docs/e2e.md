@@ -30,12 +30,17 @@ Dwa przypadki: angielski desktop 1440×1000 w jasnym motywie oraz polski widok
 mobilny 390×844 w ciemnym motywie. Każdy przechodzi:
 
 1. Dodanie integracji przez UI, wybór źródeł, odrzucone hasło i poprawne logowanie.
-2. Wybór listy, powiązanie Shopping List i potwierdzenie scalenia.
+2. Wybór listy, powiązanie Shopping List, potwierdzenie scalenia i końcowy
+   wybór sposobu rozstrzygania konfliktów.
 3. Dodanie i odhaczenie produktu w natywnym panelu zakupów.
 4. Powrót zmiany nazwy i statusu z serwera Listonic do panelu HA.
 5. Polską komendę `conversation.process`: „Dodaj mleko do listy zakupów”.
 6. Awarię odczytu API, lokalne dodanie produktu i stan `pending`.
 7. Unload/setup integracji, odzyskanie zapisanej kolejki i dokładnie jeden POST.
+8. Konflikt edycji i zbiorcze rozstrzygnięcie przez natywne Naprawy, z podglądem
+   oraz potwierdzeniem zmian.
+9. Dodanie Google Keep w Opcjach i przekazanie produktu przez Shopping List do
+   Listonic.
 
 Sprawdzamy wynik w UI, stan integracji i żądania odebrane przez fake API.
 Oczekiwania zależą od zmian stanu, bez sztywnych opóźnień interfejsu.
